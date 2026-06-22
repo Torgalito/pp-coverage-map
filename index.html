@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Premium Positioning Coverage</title>
+  <link rel="stylesheet" href="ui/theme-uber.css" />
+  <style>
+    html, body { height: 100%; margin: 0; background: var(--pp-bg); color: var(--pp-text); font-family: var(--pp-font); }
+    .wrap { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+    a.card {
+      display: block; width: min(420px, calc(100% - 48px)); text-decoration: none;
+      background: var(--pp-surface-solid); border: 1px solid var(--pp-border);
+      border-radius: var(--pp-radius); padding: 18px 22px; color: var(--pp-text);
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    a.card:hover { transform: translateY(-2px); border-color: var(--pp-a-color); }
+    a.card b { display: block; font-size: 16px; margin-bottom: 4px; }
+    a.card span { font-size: 13px; color: var(--pp-text-dim); }
+    h1 { font-size: 18px; margin: 0 0 10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Premium Positioning Coverage</h1>
+    <a class="card" href="demo.html"><b>Demo — website embed</b><span>Auto tour, minimal chrome. For Webflow sections (iframe).</span></a>
+    <a class="card" href="app.html"><b>App — full version</b><span>Coverage / Heatmap / 3D Density, service toggles, dark &amp; light theme.</span></a>
+  </div>
+</body>
+</html>

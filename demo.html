@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Premium Positioning Coverage — Demo</title>
+
+  <!-- libs — maplibre v5 + deck.gl 9.1 for the globe projection
+       (app.html stays on maplibre 4 / deck 9.0: flat map is better for the task UX) -->
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/deck.gl@9.1.15/dist.min.js"></script>
+  <script src="https://unpkg.com/gsap@3.12.5/dist/gsap.min.js"></script>
+
+  <!-- DESIGN LAYER -->
+  <link rel="stylesheet" href="ui/theme-uber.css" />
+
+  <style>html, body { height: 100%; margin: 0; }</style>
+</head>
+<body>
+  <div id="pp" class="pp-root"><div id="pp-map" class="pp-map"></div></div>
+
+  <!-- FUNCTIONAL LAYER -->
+  <script src="core/engine.js"></script>
+
+  <script>
+    /* ============================================================
+     * DEMO BUILD — embedded in a website section (Webflow iframe).
+     * Job in the funnel: substantiate the platform claim visually,
+     * then push to the full coverage checker (CTA). Minimal chrome,
+     * auto camera tour, cooperativeGestures (page scroll is never
+     * hijacked). Uses ONLY the engine's public API.
+     * ============================================================ */
+
+    // where the "Check your coverage" CTA points (full app / site page)
+    const CTA_URL = 'app.html';
+
+    const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // strict timing: after tab throttling, tweens jump to their real
+    // position instead of replaying in slow motion (important for embeds)
+    gsap.ticker.lagSmoothing(0);
+
+    const engine = new PPMap({
+      container: '#pp-map',
+      services: [
+        { id: 'a', label: 'Network 1', url: 'data/service_a.csv' },
+        { id: 'b', label: 'Network 2', url: 'data/service_b.csv' }
+      ],
+      config: {
+        view: 'coverage',   // heatmap is screen-space aggregated: not globe-compatible
+        basemap: 'dark',
+        projection: 'globe',
+        // small bright dots ("city lights") rather than service discs
+        coverageMinPixels: 1.7,
+        coverageMaxPixels: 4,
+        coverageOpacity: 0.75,
+        cooperativeGestures: true,
+        initialViewState: { longitude: -30, latitude: 28, zoom: 1.55, pitch: 0, bearing: 0 }
+      }
+    });
+
+    const root = document.getElementById('pp');
+
+    /* --- minimal chrome --- */
+    const header = document.createElement('div');
+    header.className = 'pp-panel pp-panel--header';
+    header.innerHTML =
+      '<h1 class="pp-title">One platform. Every region.</h1>' +
+      '<p class="pp-subtitle">Managed multi-network positioning — visualised</p>' +
+      '<div class="pp-stats">' +
+        '<div class="pp-stat"><b id="pp-count">0</b><span>Base stations</span></div>' +
+        '<div class="pp-stat"><b id="pp-countries">…</b><span>Countries</span></div>' +
+        '<div class="pp-stat"><b>2</b><span>Networks, one contract</span></div>' +
+      '</div>';
+    root.appendChild(header);
+
+    const legend = document.createElement('div');
+    legend.className = 'pp-panel pp-panel--legend';
+    legend.innerHTML =
+      '<div class="pp-legend-row"><span class="pp-dot" style="background:var(--pp-a-color)"></span>Network 1</div>' +
+      '<div class="pp-legend-row"><span class="pp-dot" style="background:var(--pp-b-color)"></span>Network 2</div>' +
+      '<div class="pp-legend-note">Overlap = multi-network redundancy.</div>';
+    root.appendChild(legend);
+
+    const caption = document.createElement('div');
+    caption.className = 'pp-demo-caption';
+    caption.innerHTML = '<div class="pp-caption-card"><span id="pp-cap-title"></span><small id="pp-cap-sub"></small></div>';
+    caption.style.opacity = 0;
+    root.appendChild(caption);
+
+    const cta = document.createElement('a');
+    cta.className = 'pp-demo-cta';
+    cta.href = CTA_URL;
+    cta.target = '_top';
+    cta.textContent = 'Check your coverage →';
+    root.appendChild(cta);
+
+    const hint = document.createElement('div');
+    hint.className = 'pp-demo-hint';
+    hint.textContent = 'Drag to explore · ⌘/Ctrl + scroll to zoom';
+    root.appendChild(hint);
+
+    /* --- auto tour over the densest regions, platform-narrative captions --- */
+    let tourTimer = null, tourStopped = false;
+
+    function regionName(lat, lon) {
+      if (lon < -30) return lat > 23 ? 'North America' : 'Latin America';
+      if (lon < 60) return lat > 36 ? 'Europe' : 'Africa & Middle East';
+      return 'Asia–Pacific';
+    }
+
+    const SUBLINES = [
+      'Multi-network reliability, one contract',
+      'Redundant coverage where it matters',
+      'Centralised control and visibility',
+      'Positioning infrastructure, managed for you'
+    ];
+
+    function runTour(stats) {
+      const stops = engine.getHotspots(4);
+      if (!stops.length) return;
+      let i = -1;
+
+      function next() {
+        if (document.hidden) { tourTimer = setTimeout(next, 1500); return; } // wait until visible
+        i = (i + 1) % (stops.length + 1);
+        if (i === stops.length) {
+          // overview beat: pull back and slowly spin the globe
+          setCaption('Wherever you operate', stats.total.toLocaleString('en-US') + ' base stations, managed as one platform');
+          engine.flyTo({ center: [-30, 25], zoom: 1.55 });
+          tourTimer = setTimeout(() => {
+            if (tourStopped) return;
+            engine.map.easeTo({ center: [110, 25], zoom: 1.55, duration: 5200, easing: t => t, essential: true });
+            tourTimer = setTimeout(next, 5400);
+          }, 2600);
+          return;
+        }
+        const s = stops[i];
+        setCaption(regionName(s.latitude, s.longitude) + ' — ' + s.count.toLocaleString('en-US') + ' stations', SUBLINES[i % SUBLINES.length]);
+        engine.flyTo({ center: [s.longitude, s.latitude], zoom: 4 });
+        tourTimer = setTimeout(next, 6000);
+      }
+      next();
+    }
+
+    function setCaption(title, sub) {
+      const t = document.getElementById('pp-cap-title');
+      const s = document.getElementById('pp-cap-sub');
+      gsap.timeline()
+        .to(caption, { opacity: 0, y: 8, duration: 0.25, ease: 'power2.in' })
+        .call(() => { t.textContent = title; s.textContent = sub; })
+        .to(caption, { opacity: 1, y: 0, duration: 0.45, ease: 'power3.out' });
+    }
+
+    // stop the tour as soon as the visitor takes over
+    ['mousedown', 'touchstart', 'wheel'].forEach(evt =>
+      root.addEventListener(evt, stopTour, { passive: true })
+    );
+    function stopTour() {
+      if (tourStopped) return;
+      tourStopped = true;
+      clearTimeout(tourTimer);
+      gsap.to(caption, { opacity: 0, duration: 0.3 });
+      hint.textContent = 'Exploring freely — reload to restart the tour';
+      gsap.to(hint, { opacity: 0, delay: 2.5, duration: 0.6 });
+    }
+
+    /* --- boot --- */
+    engine.on('ready', stats => {
+      const node = document.getElementById('pp-count');
+      if (REDUCED) {
+        node.textContent = stats.total.toLocaleString('en-US');
+      } else {
+        const obj = { v: 0 };
+        gsap.to(obj, { v: stats.total, duration: 1.6, ease: 'power2.out',
+          onUpdate: () => { node.textContent = Math.round(obj.v).toLocaleString('en-US'); } });
+        gsap.from([header, legend, cta, hint], { y: 14, opacity: 0, duration: 0.7, stagger: 0.1, ease: 'power3.out', clearProps: 'opacity,transform' });
+      }
+
+      engine.loadCountries('data/countries.geo.json').then(c => {
+        document.getElementById('pp-countries').textContent = c.count;
+      });
+
+      // honour reduced-motion: static overview, no auto tour
+      if (!REDUCED) setTimeout(() => { if (!tourStopped) runTour(stats); }, 1800);
+    });
+
+    // console / debug access
+    window.ppEngine = engine;
+  </script>
+</body>
+</html>

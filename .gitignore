@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# editor / tooling
+.vscode/
+.idea/
+*.log
+
+# local dev server config (kept outside the repo anyway)
+.claude/
