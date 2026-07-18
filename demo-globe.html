@@ -19,14 +19,20 @@
       --pp-ocean: #16213a;     /* dark sea */
       --pp-land:  #3c4d72;     /* land, readable */
       --pp-border: rgba(255,255,255,0.16);
-      --pp-bg: #0A1226;        /* dark navy background */
+      --pp-bg: #091126;        /* standalone fallback — embedded mode goes transparent */
 
       --sw-font: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
       --sw-mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
       --sw-accent: #4d8df6;
     }
     html, body { height: 100%; margin: 0; background: var(--pp-bg); font-family: var(--sw-font); }
-    #pp-globe { position: absolute; inset: 0; }
+    /* embedded in an iframe, the page background goes transparent (JS)
+       so the host page colour shows through and always matches */
+    #pp-globe { position: absolute; inset: 0;
+      /* Webflow-spec glow: X 7 / Y -2 / blur 38 / #1E42A0 35% — hugs the
+         globe silhouette because the canvas background is transparent */
+      filter: drop-shadow(7px -2px 38px rgba(30,66,160,0.35));
+    }
     #pp-globe canvas { outline: none; display: block; }
 
     /* ---- network panel — tuned to the page's clean style ---- */
@@ -103,6 +109,25 @@
      * ============================================================ */
 
     const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // Embedded mode: transparent page background → the host (Webflow) colour
+    // shows through, guaranteed exact match with the section background.
+    if (window.self !== window.top) {
+      document.documentElement.style.background = 'transparent';
+      document.body.style.background = 'transparent';
+    }
+
+    /* Smallest camera altitude at which the whole sphere stays inside the
+       viewport (with breathing margin), derived from the frame aspect ratio.
+       Region fly-tos clamp to this so the globe is never cropped, whatever
+       size/format the iframe gets in Webflow. globe.gl camera fov = 50°. */
+    function safeAltitude() {
+      const SIL = 1.25;   // full silhouette: sphere + atmosphere halo (1.17) + shadow pad
+      const halfV = 25 * Math.PI / 180;
+      const halfH = Math.atan(Math.tan(halfV) * (innerWidth / Math.max(1, innerHeight)));
+      return Math.max(1.2, SIL / Math.sin(Math.min(halfV, halfH)) - 1);
+    }
+
     const css = getComputedStyle(document.documentElement);
     const tok = (n, f) => (css.getPropertyValue(n).trim() || f);
     const OCEAN = tok('--pp-ocean'), LAND = tok('--pp-land'), BORDER = tok('--pp-border');
@@ -259,7 +284,11 @@
         row.addEventListener('click', () => {
           list.querySelectorAll('.sw-row').forEach(x => x.classList.remove('on'));
           row.classList.add('on');
-          if (STATE.globe) { STATE.globe.controls().autoRotate = false; STATE.globe.pointOfView({ lat: r.lat, lng: r.lng, altitude: 1.6 }, 1200); }
+          if (STATE.globe) {
+            STATE.globe.controls().autoRotate = false;
+            // zoom as close as the frame allows without cropping the sphere
+            STATE.globe.pointOfView({ lat: r.lat, lng: r.lng, altitude: Math.max(1.6, safeAltitude()) }, 1200);
+          }
         });
         list.appendChild(row);
       });
@@ -290,7 +319,7 @@
         .backgroundColor('rgba(0,0,0,0)')
         .globeImageUrl(buildTextureURL())
         .showAtmosphere(true).atmosphereColor('#2c4a7a').atmosphereAltitude(0.17)
-        .pointOfView({ lat: 28, lng: -25, altitude: 2.3 }, 0);
+        .pointOfView({ lat: 28, lng: -25, altitude: Math.max(2.3, safeAltitude()) }, 0);
       STATE.globe = globe;
 
       (globe.lights() || []).forEach(l => {
