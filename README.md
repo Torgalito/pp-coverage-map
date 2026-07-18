@@ -9,8 +9,26 @@ Refonte UX/UI de https://ppheatmap.netlify.app/ en rendu type **Uber** :
 
 | Fichier | Usage | Particularités |
 |---|---|---|
-| `demo.html` | Section de site (Webflow) | **Globe 3D** (projection MapLibre v5 + deck.gl 9.1 interleaved), points "city lights", tour caméra auto qui plonge sur les zones denses puis recule et fait tourner le globe, captions narratif plateforme, compteurs animés, CTA "Check your coverage →", `cooperativeGestures` (le scroll de page n'est jamais capturé), respect de `prefers-reduced-motion` |
+| `demo-globe.html` | Hero marketing (par défaut) | **Vrai globe 3D** (globe.gl / Three.js), **dark theme** (globe navy lisible sur fond #0A1226), **heatmap deux-tons** style deck.gl **haute définition** (texture 4096×2048) : champ de densité par réseau mappé à travers une **rampe de couleur multi-paliers** (translucide → glow → cœur saturé, avec contours/ridges fins) — reproduit le rendu exact de l'app 2D. Texture auto-lumineuse (emissive) pour le glow. Basemap + densités **mises en cache** → les toggles ne font que recomposer (~120 ms). Police **Manrope**. **Network panel** "XYZ · LIVE NETWORK" stylé sur la page (Inter, barres de signal affinées) : liste scrollable de toutes les zones couvertes (Western Europe, Nordics, North America, Japan, Australia, Southern Africa, Brazil) — clic = rotation vers la zone ; **toggles Network 1 / Network 2** qui recomposent la heatmap en direct (texture régénérée, garde-fou : au moins un réseau actif). Heatmap peinte en texture car la HeatmapLayer deck.gl ne rend pas en projection globe ; rampes `RAMP_A/B` + rayon/intensité `cfg` réglables. Zoom molette off, `prefers-reduced-motion` respecté |
+| `demo-globe-choropleth.html` | Variante hero (premium glossy) | Globe clair glossy, **pays en choroplèthe** (couverts en accent, satellite flottant). Plus "marketing premium" que data |
+| `demo.html` | Section de site (Webflow) | **Carte sur globe** (projection MapLibre v5 + deck.gl 9.1 interleaved) : points "city lights" sur tuiles réelles, tour caméra auto. Plus "réaliste/géographique" que conceptuel |
 | `app.html` | Coverage checker complet | **Carte à plat** (mercator — meilleure ergonomie de tâche : pas d'hémisphère masqué, lecture des distances), recherche d'adresse + "My location" + clic-partout → verdict de couverture, vues Coverage/Heatmap, toggles réseaux, panneau pays, thème dark/light, URL partageable, tooltips, fullscreen |
+
+### Trois moteurs de rendu, une seule donnée
+
+La philosophie deux couches tient même avec trois renderers différents : **les données
+(CSV) et les couleurs (tokens CSS) sont partagées**, seul le moteur de rendu change.
+
+| Build | Renderer | Quand le choisir |
+|---|---|---|
+| `demo-globe.html` | **globe.gl / Three.js** | Hero marketing épuré — vraie 3D, heatmap deux-tons peinte en texture, sans UI (variante choroplèthe : `demo-globe-choropleth.html`) |
+| `demo.html` | **deck.gl + MapLibre** | Quand on veut voir la géographie réelle (continents, pays) sur le globe |
+| `app.html` | **deck.gl + MapLibre (plat)** | Outil de tâche — vérifier SA couverture |
+
+`core/globe-data.js` est la couche données du globe : elle charge les mêmes CSV et en dérive
+soit la **couverture par pays** (point-in-polygon → quels pays sont couverts, pour la
+choroplèthe), soit un champ de points + hubs + arcs (helpers conservés). Elle ne connaît ni
+Three.js ni les couleurs (lues dans les tokens CSS côté HTML).
 
 **Pourquoi globe sur la démo et plat sur l'app :** le globe sert le storytelling
 ("one platform, every region" — on voit la planète tourner) ; la carte plate sert la
@@ -90,13 +108,14 @@ engine.on('ready'|'statechange'|'probe'|'countries'|'hover'|'movestart', cb);
 
 ```html
 <div style="position:relative;width:100%;height:600px;border-radius:16px;overflow:hidden;">
-  <iframe src="https://VOTRE-SITE.netlify.app/demo.html"
+  <iframe src="https://VOTRE-SITE.netlify.app/demo-globe.html"
           style="position:absolute;inset:0;width:100%;height:100%;border:0;"
-          loading="lazy" title="Coverage map"></iframe>
+          loading="lazy" title="Coverage globe"></iframe>
 </div>
 ```
 
-Dans `demo.html`, pointer `CTA_URL` vers la page coverage checker du site
+Remplacer `demo-globe.html` par `demo.html` pour la variante carte réaliste.
+Dans chaque démo, pointer `CTA_URL` vers la page coverage checker du site
 (le lien s'ouvre en `_top`, donc hors iframe).
 
 ## Partage (procurement, équipes)
@@ -106,8 +125,17 @@ un zoom sur une région se partage par copier-coller d'URL.
 
 ## Stack (CDN, aucun build)
 
-- maplibre-gl 4.7 — basemap vectorielle (Carto dark-matter / positron, gratuits)
-- deck.gl 9.0 — ScatterplotLayer, HeatmapLayer, LineLayer (probe), HexagonLayer (dispo)
+- globe.gl 2.46 (bundle Three.js) — `demo-globe.html` : globe 3D, couches points/arcs/rings
+- maplibre-gl 4.7 / 5.24 — basemap vectorielle (Carto dark-matter / positron, gratuits)
+- deck.gl 9.0 / 9.1 — ScatterplotLayer, HeatmapLayer, LineLayer (probe), HexagonLayer (dispo)
 - gsap 3.12 — compteurs, transitions (désactivé si `prefers-reduced-motion`)
 - Photon (komoot.io) — géocodage gratuit sans clé ; remplaçable par Mapbox/Google dans
   `ui/components.js` (`GEOCODER`)
+
+### Autres pistes conceptuelles évaluées (non retenues pour l'instant)
+
+- **COBE** (~5 kb) — globe pointillé ultra-léger, superbe en hero minimal type Stripe/Vercel,
+  mais pas d'arcs ni d'interaction riche.
+- **Three.js brut** — contrôle total (shaders maison, halo custom) au prix de 3-4× plus de code.
+- **D3 orthographic** — exactement le rendu "filaire éditorial" de la réf, mais 2D projeté
+  (pas de vraie profondeur/éclairage). Bon plan B si on veut un rendu très épuré et léger.

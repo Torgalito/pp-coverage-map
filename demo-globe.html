@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Premium Positioning Coverage — Globe</title>
+
+  <!-- renderer: globe.gl (Three.js) — standalone build bundles three -->
+  <script src="https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js"></script>
+  <!-- page typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --pp-net1: #33d69a;      /* Network 1 — teal-green (matches heatmap) */
+      --pp-net2: #2ee65f;      /* Network 2 — spring green (matches heatmap) */
+      --pp-ocean: #16213a;     /* dark sea */
+      --pp-land:  #3c4d72;     /* land, readable */
+      --pp-border: rgba(255,255,255,0.16);
+      --pp-bg: #0A1226;        /* dark navy background */
+
+      --sw-font: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      --sw-mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      --sw-accent: #4d8df6;
+    }
+    html, body { height: 100%; margin: 0; background: var(--pp-bg); font-family: var(--sw-font); }
+    #pp-globe { position: absolute; inset: 0; }
+    #pp-globe canvas { outline: none; display: block; }
+
+    /* ---- network panel — tuned to the page's clean style ---- */
+    .sw {
+      position: absolute; top: 20px; left: 20px; width: 332px; max-width: calc(100% - 40px);
+      background: rgba(12,21,40,0.82); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.07); border-radius: 16px;
+      box-shadow: 0 16px 50px rgba(0,0,0,0.5); overflow: hidden; z-index: 10;
+      color: #e9eef7;
+    }
+    .sw-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 18px 12px;
+      position: relative; overflow: hidden;
+    }
+    .sw-head .t { font: 500 10px/1 var(--sw-mono); letter-spacing: 0.18em; color: #5c6e93; }
+    .sw-mon { display: flex; align-items: center; gap: 7px; font: 500 10px/1 var(--sw-mono); letter-spacing: 0.16em; color: #8a9cbe; z-index: 1; }
+    .sw-mon i { width: 6px; height: 6px; border-radius: 50%; background: #ff7a3c; box-shadow: 0 0 8px #ff7a3c; animation: swpulse 1.9s ease-in-out infinite; }
+    @keyframes swpulse { 0%,100% { opacity: 1; } 50% { opacity: 0.28; } }
+    .sw-rings { position: absolute; right: -38px; top: -50px; width: 150px; height: 150px; pointer-events: none; }
+
+    .sw-list { max-height: 322px; overflow-y: auto; padding: 4px 8px; }
+    .sw-list::-webkit-scrollbar { width: 6px; }
+    .sw-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+    .sw-row {
+      display: flex; align-items: center; gap: 14px; padding: 11px 12px; cursor: pointer;
+      border-radius: 10px; position: relative;
+      transition: background 0.16s ease;
+    }
+    .sw-row:hover { background: rgba(255,255,255,0.04); }
+    .sw-row.on { background: rgba(77,141,246,0.12); }
+    .sw-row.on::before { content: ""; position: absolute; left: 0; top: 9px; bottom: 9px; width: 2.5px; border-radius: 2px; background: var(--sw-accent); }
+    .sw-info { flex: 1; min-width: 0; }
+    .sw-name { font: 600 14.5px/1.25 var(--sw-font); letter-spacing: -0.01em; color: #f1f5fb; }
+    .sw-sub { margin-top: 4px; font: 400 9.5px/1 var(--sw-mono); letter-spacing: 0.14em; color: #66789c; text-transform: uppercase; }
+
+    /* refined signal bars */
+    .sw-bars { display: flex; align-items: flex-end; gap: 2.5px; height: 17px; }
+    .sw-bars i { width: 3px; border-radius: 1.5px; background: rgba(255,255,255,0.14); }
+    .sw-bars i.f { background: var(--sw-accent); }
+    .sw-chev { width: 8px; color: var(--sw-accent); font-size: 15px; opacity: 0; transition: opacity 0.16s ease; }
+    .sw-row.on .sw-chev { opacity: 1; }
+
+    /* network toggles */
+    .sw-foot { display: flex; gap: 8px; padding: 10px 16px 16px; }
+    .sw-tog {
+      flex: 1; display: flex; align-items: center; justify-content: center; gap: 9px; padding: 10px 12px;
+      border: 0; border-radius: 10px; background: rgba(255,255,255,0.05);
+      color: #dbe2ef; font: 600 11.5px/1 var(--sw-font); letter-spacing: -0.01em; cursor: pointer;
+      transition: opacity 0.16s ease, background 0.16s ease;
+    }
+    .sw-tog:hover { background: rgba(255,255,255,0.08); }
+    .sw-tog .d { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+    .sw-tog[data-net="a"] .d { background: var(--pp-net1); box-shadow: 0 0 7px var(--pp-net1); }
+    .sw-tog[data-net="b"] .d { background: var(--pp-net2); box-shadow: 0 0 7px var(--pp-net2); }
+    .sw-tog.off { opacity: 0.42; }
+    .sw-tog.off .d { background: transparent !important; box-shadow: none; border: 1.5px solid currentColor; }
+
+    @media (max-width: 560px) { .sw { left: 12px; right: 12px; top: 12px; width: auto; } .sw-list { max-height: 232px; } }
+  </style>
+</head>
+<body>
+  <div id="pp-globe"></div>
+
+  <!-- DATA LAYER (renderer-agnostic) -->
+  <script src="core/globe-data.js"></script>
+
+  <script>
+    /* ============================================================
+     * HEATMAP GLOBE — dark data-globe (globe.gl / Three.js).
+     * Two-tone coverage heatmap (deck.gl-style colour ramp) baked
+     * into the globe texture. Network panel: switch to any covered
+     * zone, toggle each network on/off (rebuilds the heatmap).
+     * ============================================================ */
+
+    const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const css = getComputedStyle(document.documentElement);
+    const tok = (n, f) => (css.getPropertyValue(n).trim() || f);
+    const OCEAN = tok('--pp-ocean'), LAND = tok('--pp-land'), BORDER = tok('--pp-border');
+
+    const W = 4096, H = 2048;            // high-def equirectangular texture
+    const project = (lng, lat) => [ (lng + 180) / 360 * W, (90 - lat) / 180 * H ];
+
+    const STATE = { geo: null, sets: null, enabled: { a: true, b: true }, globe: null };
+
+    /* ---------- basemap ---------- */
+    function paintBasemap(ctx) {
+      ctx.fillStyle = OCEAN; ctx.fillRect(0, 0, W, H);
+      ctx.lineJoin = 'round';
+      STATE.geo.features.forEach(f => {
+        const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+        polys.forEach(rings => {
+          if (ringSpan(rings[0]) > 180) return;
+          ctx.beginPath();
+          rings.forEach(ring => {
+            ring.forEach((pt, i) => { const [x, y] = project(pt[0], pt[1]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+            ctx.closePath();
+          });
+          ctx.fillStyle = LAND; ctx.fill('evenodd');
+          ctx.strokeStyle = BORDER; ctx.lineWidth = 1; ctx.stroke();
+        });
+      });
+    }
+    function ringSpan(ring) { let mn = 180, mx = -180; ring.forEach(p => { if (p[0] < mn) mn = p[0]; if (p[0] > mx) mx = p[0]; }); return mx - mn; }
+
+    /* ---------- heatmap: density field → multi-stop colour ramp ---------- */
+    // Gentle onsets (several low-alpha stops) kill the "aura" edge ring
+    // that a hard 0 → 0.26 alpha jump paints around each cloud.
+    const RAMP_A = [            // Network 1 — teal-green halo (soft, cooler)
+      [0.00, 'rgba(34,201,138,0)'], [0.07, 'rgba(35,203,142,0.05)'], [0.14, 'rgba(37,205,146,0.14)'],
+      [0.24, 'rgba(38,206,148,0.26)'], [0.48, 'rgba(42,214,156,0.50)'],
+      [0.80, 'rgba(58,226,168,0.68)'], [1.00, 'rgba(122,240,190,0.82)']
+    ];
+    const RAMP_B = [             // Network 2 — bright spring green, narrow deep-green ridge
+      [0.00, 'rgba(46,230,95,0)'], [0.05, 'rgba(70,233,112,0.05)'], [0.10, 'rgba(84,235,120,0.15)'],
+      [0.16, 'rgba(92,236,124,0.30)'], [0.38, 'rgba(52,224,98,0.66)'],
+      [0.60, 'rgba(40,206,84,0.86)'], [0.71, 'rgba(17,145,58,0.95)'], [0.79, 'rgba(50,220,96,0.95)'],
+      [0.90, 'rgba(112,240,142,0.97)'], [1.00, 'rgba(176,250,196,1.0)']
+    ];
+    function makePalette(stops) {
+      const c = document.createElement('canvas'); c.width = 256; c.height = 1;
+      const x = c.getContext('2d'); const g = x.createLinearGradient(0, 0, 256, 0);
+      stops.forEach(s => g.addColorStop(s[0], s[1])); x.fillStyle = g; x.fillRect(0, 0, 256, 1);
+      return x.getImageData(0, 0, 256, 1).data;
+    }
+    function densityField(points, R, perAlpha) {
+      const c = document.createElement('canvas'); c.width = W; c.height = H;
+      const x = c.getContext('2d'); x.globalCompositeOperation = 'lighter';
+      points.forEach(p => {
+        const [px, py] = project(p.lng, p.lat);
+        const blob = cx => { const g = x.createRadialGradient(cx, py, 0, cx, py, R);
+          g.addColorStop(0, 'rgba(255,255,255,' + perAlpha + ')'); g.addColorStop(1, 'rgba(255,255,255,0)');
+          x.fillStyle = g; x.beginPath(); x.arc(cx, py, R, 0, 7); x.fill(); };
+        blob(px); if (px < R) blob(px + W); if (px > W - R) blob(px - W);
+      });
+      // Slight blur smooths the discrete alpha steps at cloud edges
+      // (the "pixelated staircase" look at low density) before colourising.
+      const sm = document.createElement('canvas'); sm.width = W; sm.height = H;
+      const sx = sm.getContext('2d');
+      sx.filter = 'blur(3px)';
+      sx.drawImage(c, 0, 0);
+      const data = sx.getImageData(0, 0, W, H).data, a = new Uint8Array(W * H);
+      for (let i = 0, j = 3; i < a.length; i++, j += 4) a[i] = data[j];
+      return a;
+    }
+    const PAL = { a: makePalette(RAMP_A), b: makePalette(RAMP_B) };
+    // Finer radii (smaller bandwidth) → high-def cluster structure + thin ridges.
+    // a = blue halo (broad, soft); b = amber cores (tight, dense → saturated ridges).
+    const HCFG = { a: { R: 34, alpha: 0.014 }, b: { R: 22, alpha: 0.075 } };
+
+    /* ---------- texture (basemap + density cached once, toggles recomposite) ---------- */
+    function precompute() {
+      const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+      const ctx = cv.getContext('2d');
+      paintBasemap(ctx);
+      STATE.baseImg = ctx.getImageData(0, 0, W, H);
+      STATE.density = {};
+      STATE.sets.forEach(s => { const k = HCFG[s.id] || HCFG.a; STATE.density[s.id] = densityField(s.points, k.R, k.alpha); });
+    }
+    function buildTextureURL() {
+      const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+      const ctx = cv.getContext('2d');
+      const img = ctx.createImageData(W, H); img.data.set(STATE.baseImg.data);  // start from cached basemap
+      const out = img.data;
+      STATE.sets.forEach(s => {                 // a (blue) then b (amber) — amber composites on top
+        if (!STATE.enabled[s.id]) return;
+        const pal = PAL[s.id], dens = STATE.density[s.id];
+        for (let i = 0; i < dens.length; i++) {
+          const d = dens[i]; if (!d) continue;
+          const pi = d << 2, pa = pal[pi + 3] / 255; if (!pa) continue;
+          const o = i << 2;
+          out[o] = pal[pi] * pa + out[o] * (1 - pa);
+          out[o + 1] = pal[pi + 1] * pa + out[o + 1] * (1 - pa);
+          out[o + 2] = pal[pi + 2] * pa + out[o + 2] * (1 - pa);
+        }
+      });
+      ctx.putImageData(img, 0, 0);
+      return cv.toDataURL();
+    }
+    function applyEmissive() {              // re-bind emissive after each texture (re)load
+      let n = 0;
+      const id = setInterval(() => {
+        const mat = STATE.globe && STATE.globe.globeMaterial();
+        if (mat && mat.map) {
+          mat.shininess = 2; mat.emissiveMap = mat.map; mat.emissiveIntensity = 0.8;
+          try { mat.emissive.setRGB(1, 1, 1); } catch (e) { try { mat.emissive.set('#ffffff'); } catch (e2) {} }
+          // max anisotropy = crisp texture at oblique viewing angles on the sphere
+          try {
+            const rd = STATE.globe.renderer();
+            if (rd) { mat.map.anisotropy = rd.capabilities.getMaxAnisotropy(); mat.map.needsUpdate = true; }
+          } catch (e) {}
+          mat.needsUpdate = true;
+        }
+        if (++n > 6) clearInterval(id);
+      }, 110);
+    }
+    function refreshHeatmap() {
+      if (!STATE.globe) return;
+      STATE.globe.globeImageUrl(buildTextureURL());
+      applyEmissive();
+    }
+
+    /* ---------- network panel ---------- */
+    const REGIONS = [
+      { name: 'Western Europe', src: 'EUREF', mode: 'multi-net', bars: 5, lat: 50, lng: 9 },
+      { name: 'Nordics', src: 'EUREF', mode: 'multi-net', bars: 4, lat: 62, lng: 16 },
+      { name: 'North America', src: 'NTRIP', mode: 'multi-net', bars: 5, lat: 40, lng: -95 },
+      { name: 'Japan', src: 'NTRIP', mode: 'multi-net', bars: 4, lat: 36, lng: 138 },
+      { name: 'Australia', src: 'AUSCORS', mode: 'single', bars: 3, lat: -27, lng: 134 },
+      { name: 'Southern Africa', src: 'TRIGNET', mode: 'single', bars: 2, lat: -29, lng: 24 },
+      { name: 'Brazil', src: 'RBMC', mode: 'single', bars: 2, lat: -15, lng: -48 }
+    ];
+    function buildPanel() {
+      const sw = document.createElement('div'); sw.className = 'sw';
+      const rings = '<svg class="sw-rings" viewBox="0 0 150 150" fill="none" stroke="rgba(120,150,210,0.14)">' +
+        '<circle cx="120" cy="34" r="22"/><circle cx="120" cy="34" r="44"/><circle cx="120" cy="34" r="66"/><circle cx="120" cy="34" r="90"/></svg>';
+      sw.innerHTML =
+        '<div class="sw-head"><span class="t">XYZ · LIVE NETWORK</span><span class="sw-mon"><i></i>MONITORING</span>' + rings + '</div>' +
+        '<div class="sw-list"></div>' +
+        '<div class="sw-foot">' +
+          '<button class="sw-tog on" data-net="a"><span class="d"></span>Network 1</button>' +
+          '<button class="sw-tog on" data-net="b"><span class="d"></span>Network 2</button>' +
+        '</div>';
+      const list = sw.querySelector('.sw-list');
+      REGIONS.forEach((r, idx) => {
+        const row = document.createElement('div'); row.className = 'sw-row' + (idx === 0 ? ' on' : '');
+        const bars = [5, 8, 11, 14, 17].map((h, bi) => '<i class="' + (bi < r.bars ? 'f' : '') + '" style="height:' + h + 'px"></i>').join('');
+        row.innerHTML = '<div class="sw-info"><div class="sw-name">' + r.name + '</div><div class="sw-sub">' + r.src + ' · ' + r.mode + '</div></div>' +
+          '<div class="sw-bars">' + bars + '</div><div class="sw-chev">›</div>';
+        row.addEventListener('click', () => {
+          list.querySelectorAll('.sw-row').forEach(x => x.classList.remove('on'));
+          row.classList.add('on');
+          if (STATE.globe) { STATE.globe.controls().autoRotate = false; STATE.globe.pointOfView({ lat: r.lat, lng: r.lng, altitude: 1.6 }, 1200); }
+        });
+        list.appendChild(row);
+      });
+      sw.querySelectorAll('.sw-tog').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const net = btn.dataset.net;
+          // keep at least one network on
+          if (STATE.enabled[net] && Object.values(STATE.enabled).filter(Boolean).length === 1) return;
+          STATE.enabled[net] = !STATE.enabled[net];
+          btn.classList.toggle('on', STATE.enabled[net]);
+          btn.classList.toggle('off', !STATE.enabled[net]);
+          refreshHeatmap();
+        });
+      });
+      document.body.appendChild(sw);
+    }
+
+    /* ---------- boot ---------- */
+    Promise.all([
+      fetch('data/countries.geo.json').then(r => r.json()),
+      PPGlobeData.loadStations([{ id: 'a', url: 'data/service_a.csv' }, { id: 'b', url: 'data/service_b.csv' }])
+    ]).then(([geo, sets]) => {
+      STATE.geo = geo; STATE.sets = sets;
+      precompute();          // basemap + density fields (heavy, once)
+      buildPanel();
+
+      const globe = Globe()(document.getElementById('pp-globe'))
+        .backgroundColor('rgba(0,0,0,0)')
+        .globeImageUrl(buildTextureURL())
+        .showAtmosphere(true).atmosphereColor('#2c4a7a').atmosphereAltitude(0.17)
+        .pointOfView({ lat: 28, lng: -25, altitude: 2.3 }, 0);
+      STATE.globe = globe;
+
+      (globe.lights() || []).forEach(l => {
+        if (l.type === 'AmbientLight') l.intensity = 0.7;
+        if (l.type === 'DirectionalLight') { l.intensity = 0.35; l.position.set(0.2, 0.4, 1); }
+      });
+      const r = globe.renderer(); if (r) r.toneMappingExposure = 1.05;
+      applyEmissive();
+
+      const c = globe.controls();
+      c.enableZoom = false; c.autoRotate = !REDUCED; c.autoRotateSpeed = 0.35;
+      c.enableDamping = true; c.dampingFactor = 0.08;
+
+      const fit = () => globe.width(innerWidth).height(innerHeight);
+      addEventListener('resize', fit); fit();
+
+      window.ppGlobe = globe;
+    });
+  </script>
+</body>
+</html>
