@@ -116,11 +116,19 @@
        viewport (with breathing margin), derived from the frame aspect ratio.
        Region fly-tos clamp to this so the globe is never cropped, whatever
        size/format the iframe gets in Webflow. globe.gl camera fov = 50°. */
+    // Viewport size, never zero (an iframe can boot before it is laid out).
+    function vp() {
+      const d = document.documentElement;
+      return { w: innerWidth || d.clientWidth || 800, h: innerHeight || d.clientHeight || 600 };
+    }
+    const HOME = () => ({ lat: 28, lng: -25, altitude: Math.max(2.3, safeAltitude()) });
     function safeAltitude() {
       const SIL = 1.25;   // full silhouette: sphere + atmosphere halo (1.17) + shadow pad
+      const v = vp();
       const halfV = 25 * Math.PI / 180;
-      const halfH = Math.atan(Math.tan(halfV) * (innerWidth / Math.max(1, innerHeight)));
-      return Math.max(1.2, SIL / Math.sin(Math.min(halfV, halfH)) - 1);
+      const halfH = Math.atan(Math.tan(halfV) * (v.w / v.h));
+      const a = SIL / Math.sin(Math.min(halfV, halfH)) - 1;
+      return isFinite(a) ? Math.max(1.2, a) : 2.3;
     }
 
     const css = getComputedStyle(document.documentElement);
@@ -309,8 +317,9 @@
       const globe = Globe()(document.getElementById('pp-globe'))
         .backgroundColor('rgba(0,0,0,0)')
         .globeImageUrl(buildTextureURL())
-        .showAtmosphere(true).atmosphereColor('#2c4a7a').atmosphereAltitude(0.17)
-        .pointOfView({ lat: 28, lng: -25, altitude: Math.max(2.3, safeAltitude()) }, 0);
+        .showAtmosphere(true).atmosphereColor('#2c4a7a').atmosphereAltitude(0.17);
+      // NB: pointOfView is applied after a frame (see below), never chained
+      // here — chaining it at construction can leave the camera at NaN.
       STATE.globe = globe;
 
       (globe.lights() || []).forEach(l => {
@@ -322,10 +331,31 @@
 
       const c = globe.controls();
       c.enableZoom = false; c.autoRotate = !REDUCED; c.autoRotateSpeed = 0.35;
-      c.enableDamping = true; c.dampingFactor = 0.08;
+      // Damping off on purpose: its internal spherical state can go NaN when
+      // the frame is laid out late (multiple embeds on a page) and then it
+      // re-poisons the camera every frame → blank globe.
+      c.enableDamping = false;
 
-      const fit = () => globe.width(innerWidth).height(innerHeight);
+      // Never size to 0 — a 0/0 aspect poisons the projection matrix with NaN
+      // and the globe never renders again. ResizeObserver catches the moment
+      // the iframe actually gets laid out (below-the-fold / multiple embeds).
+      const fit = () => { const v = vp(); if (v.w > 0 && v.h > 0) globe.width(v.w).height(v.h); };
       addEventListener('resize', fit); fit();
+      if (window.ResizeObserver) new ResizeObserver(fit).observe(document.documentElement);
+
+      // The pointOfView chained at construction can land before the frame is
+      // laid out and leave the camera at NaN (blank globe — happens when the
+      // page hosts several embeds). Re-apply it once layout has settled.
+      // Frame the globe once globe.gl has finished initialising.
+      setTimeout(() => { fit(); globe.pointOfView(HOME(), 0); }, 600);
+
+      // Watchdog: pointOfView can leave the camera at NaN when the frame is
+      // laid out late (typically several embeds on one page) — once NaN, the
+      // globe never renders again. Repair whenever it happens, permanently.
+      setInterval(() => {
+        if (Number.isFinite(globe.camera().position.z)) return;
+        c.reset(); fit(); globe.pointOfView(HOME(), 0);
+      }, 500);
 
       window.ppGlobe = globe;
     });
