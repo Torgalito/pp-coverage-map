@@ -35,63 +35,58 @@
     }
     #pp-globe canvas { outline: none; display: block; }
 
-    /* ---- network panel — tuned to the page's clean style ---- */
-    .sw {
-      position: absolute; top: 20px; left: 20px; width: 332px; max-width: calc(100% - 40px);
-      background: rgba(12,21,40,0.82); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
-      border: 1px solid rgba(255,255,255,0.07); border-radius: 16px;
-      box-shadow: 0 16px 50px rgba(0,0,0,0.5); overflow: hidden; z-index: 10;
-      color: #e9eef7;
+    /* ---- Option A: horizontal chips at the bottom of the globe ----
+       Compact, never covers the heatmap, survives any iframe crop,
+       swipeable on mobile. */
+    .chips-wrap {
+      position: absolute; left: 16px; right: 16px; bottom: 16px; z-index: 10;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
     }
-    .sw-head {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 16px 18px 12px;
-      position: relative; overflow: hidden;
+    .chips {
+      display: flex; gap: 6px; max-width: 100%; overflow-x: auto; padding: 4px;
+      -webkit-overflow-scrolling: touch; scrollbar-width: none;
     }
-    .sw-head .t { font: 500 10px/1 var(--sw-mono); letter-spacing: 0.18em; color: #5c6e93; }
-    .sw-mon { display: flex; align-items: center; gap: 7px; font: 500 10px/1 var(--sw-mono); letter-spacing: 0.16em; color: #8a9cbe; z-index: 1; }
-    .sw-mon i { width: 6px; height: 6px; border-radius: 50%; background: #ff7a3c; box-shadow: 0 0 8px #ff7a3c; animation: swpulse 1.9s ease-in-out infinite; }
+    .chips::-webkit-scrollbar { display: none; }
+    .chip {
+      flex: none; display: flex; align-items: baseline; gap: 7px;
+      padding: 10px 15px; border-radius: 999px; border: 0; cursor: pointer;
+      background: rgba(10,17,32,0.72); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+      color: #dfe6f2; font: 600 12.5px/1 var(--sw-font); letter-spacing: -0.01em;
+      transition: background 0.16s ease, color 0.16s ease;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.3);
+    }
+    .chip:hover { background: rgba(28,40,66,0.85); }
+    .chip.on { background: var(--sw-accent); color: #fff; }
+    .chip .src { font: 500 9px/1 var(--sw-mono); letter-spacing: 0.12em; color: rgba(223,230,242,0.55); text-transform: uppercase; display: none; }
+    .chip.on .src { display: inline; color: rgba(255,255,255,0.75); }
+
+    /* live badge + network toggles, one slim row */
+    .chips-sub { display: flex; align-items: center; gap: 6px; }
+    .live {
+      display: flex; align-items: center; gap: 7px; padding: 8px 13px; border-radius: 999px;
+      background: rgba(10,17,32,0.72); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+      font: 500 9.5px/1 var(--sw-mono); letter-spacing: 0.16em; color: #8a9cbe;
+    }
+    .live i { width: 6px; height: 6px; border-radius: 50%; background: #ff7a3c; box-shadow: 0 0 8px #ff7a3c; animation: swpulse 1.9s ease-in-out infinite; }
     @keyframes swpulse { 0%,100% { opacity: 1; } 50% { opacity: 0.28; } }
-    .sw-rings { position: absolute; right: -38px; top: -50px; width: 150px; height: 150px; pointer-events: none; }
-
-    .sw-list { max-height: 322px; overflow-y: auto; padding: 4px 8px; }
-    .sw-list::-webkit-scrollbar { width: 6px; }
-    .sw-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
-    .sw-row {
-      display: flex; align-items: center; gap: 14px; padding: 11px 12px; cursor: pointer;
-      border-radius: 10px; position: relative;
-      transition: background 0.16s ease;
-    }
-    .sw-row:hover { background: rgba(255,255,255,0.04); }
-    .sw-row.on { background: rgba(77,141,246,0.12); }
-    .sw-row.on::before { content: ""; position: absolute; left: 0; top: 9px; bottom: 9px; width: 2.5px; border-radius: 2px; background: var(--sw-accent); }
-    .sw-info { flex: 1; min-width: 0; }
-    .sw-name { font: 600 14.5px/1.25 var(--sw-font); letter-spacing: -0.01em; color: #f1f5fb; }
-    .sw-sub { margin-top: 4px; font: 400 9.5px/1 var(--sw-mono); letter-spacing: 0.14em; color: #66789c; text-transform: uppercase; }
-
-    /* refined signal bars */
-    .sw-bars { display: flex; align-items: flex-end; gap: 2.5px; height: 17px; }
-    .sw-bars i { width: 3px; border-radius: 1.5px; background: rgba(255,255,255,0.14); }
-    .sw-bars i.f { background: var(--sw-accent); }
-    .sw-chev { width: 8px; color: var(--sw-accent); font-size: 15px; opacity: 0; transition: opacity 0.16s ease; }
-    .sw-row.on .sw-chev { opacity: 1; }
-
-    /* network toggles */
-    .sw-foot { display: flex; gap: 8px; padding: 10px 16px 16px; }
     .sw-tog {
-      flex: 1; display: flex; align-items: center; justify-content: center; gap: 9px; padding: 10px 12px;
-      border: 0; border-radius: 10px; background: rgba(255,255,255,0.05);
-      color: #dbe2ef; font: 600 11.5px/1 var(--sw-font); letter-spacing: -0.01em; cursor: pointer;
+      display: flex; align-items: center; gap: 8px; padding: 8px 13px;
+      border: 0; border-radius: 999px; cursor: pointer;
+      background: rgba(10,17,32,0.72); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+      color: #dbe2ef; font: 600 11px/1 var(--sw-font); letter-spacing: -0.01em;
       transition: opacity 0.16s ease, background 0.16s ease;
     }
-    .sw-tog:hover { background: rgba(255,255,255,0.08); }
-    .sw-tog .d { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+    .sw-tog:hover { background: rgba(28,40,66,0.85); }
+    .sw-tog .d { width: 7px; height: 7px; border-radius: 50%; flex: none; }
     .sw-tog[data-net="a"] .d { background: var(--pp-net1); box-shadow: 0 0 7px var(--pp-net1); }
     .sw-tog[data-net="b"] .d { background: var(--pp-net2); box-shadow: 0 0 7px var(--pp-net2); }
-    .sw-tog.off { opacity: 0.42; }
+    .sw-tog.off { opacity: 0.45; }
     .sw-tog.off .d { background: transparent !important; box-shadow: none; border: 1.5px solid currentColor; }
 
-    @media (max-width: 560px) { .sw { left: 12px; right: 12px; top: 12px; width: auto; } .sw-list { max-height: 232px; } }
+    @media (max-width: 560px) {
+      .chips-wrap { left: 8px; right: 8px; bottom: 10px; }
+      .chips { justify-content: flex-start; }
+    }
   </style>
 </head>
 <body>
@@ -264,35 +259,31 @@
       { name: 'Southern Africa', src: 'TRIGNET', mode: 'single', bars: 2, lat: -29, lng: 24 },
       { name: 'Brazil', src: 'RBMC', mode: 'single', bars: 2, lat: -15, lng: -48 }
     ];
-    function buildPanel() {
-      const sw = document.createElement('div'); sw.className = 'sw';
-      const rings = '<svg class="sw-rings" viewBox="0 0 150 150" fill="none" stroke="rgba(120,150,210,0.14)">' +
-        '<circle cx="120" cy="34" r="22"/><circle cx="120" cy="34" r="44"/><circle cx="120" cy="34" r="66"/><circle cx="120" cy="34" r="90"/></svg>';
-      sw.innerHTML =
-        '<div class="sw-head"><span class="t">XYZ · LIVE NETWORK</span><span class="sw-mon"><i></i>MONITORING</span>' + rings + '</div>' +
-        '<div class="sw-list"></div>' +
-        '<div class="sw-foot">' +
+    function buildChips() {
+      const wrap = document.createElement('div'); wrap.className = 'chips-wrap';
+      wrap.innerHTML = '<div class="chips"></div>' +
+        '<div class="chips-sub">' +
+          '<span class="live"><i></i>LIVE</span>' +
           '<button class="sw-tog on" data-net="a"><span class="d"></span>Network 1</button>' +
           '<button class="sw-tog on" data-net="b"><span class="d"></span>Network 2</button>' +
         '</div>';
-      const list = sw.querySelector('.sw-list');
-      REGIONS.forEach((r, idx) => {
-        const row = document.createElement('div'); row.className = 'sw-row' + (idx === 0 ? ' on' : '');
-        const bars = [5, 8, 11, 14, 17].map((h, bi) => '<i class="' + (bi < r.bars ? 'f' : '') + '" style="height:' + h + 'px"></i>').join('');
-        row.innerHTML = '<div class="sw-info"><div class="sw-name">' + r.name + '</div><div class="sw-sub">' + r.src + ' · ' + r.mode + '</div></div>' +
-          '<div class="sw-bars">' + bars + '</div><div class="sw-chev">›</div>';
-        row.addEventListener('click', () => {
-          list.querySelectorAll('.sw-row').forEach(x => x.classList.remove('on'));
-          row.classList.add('on');
+      const chips = wrap.querySelector('.chips');
+      REGIONS.forEach(r => {
+        const chip = document.createElement('button'); chip.className = 'chip';
+        chip.innerHTML = r.name + '<span class="src">' + r.src + '</span>';
+        chip.addEventListener('click', () => {
+          chips.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+          chip.classList.add('on');
+          chip.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
           if (STATE.globe) {
             STATE.globe.controls().autoRotate = false;
             // zoom as close as the frame allows without cropping the sphere
             STATE.globe.pointOfView({ lat: r.lat, lng: r.lng, altitude: Math.max(1.6, safeAltitude()) }, 1200);
           }
         });
-        list.appendChild(row);
+        chips.appendChild(chip);
       });
-      sw.querySelectorAll('.sw-tog').forEach(btn => {
+      wrap.querySelectorAll('.sw-tog').forEach(btn => {
         btn.addEventListener('click', () => {
           const net = btn.dataset.net;
           // keep at least one network on
@@ -303,7 +294,7 @@
           refreshHeatmap();
         });
       });
-      document.body.appendChild(sw);
+      document.body.appendChild(wrap);
     }
 
     /* ---------- boot ---------- */
@@ -313,7 +304,7 @@
     ]).then(([geo, sets]) => {
       STATE.geo = geo; STATE.sets = sets;
       precompute();          // basemap + density fields (heavy, once)
-      buildPanel();
+      buildChips();
 
       const globe = Globe()(document.getElementById('pp-globe'))
         .backgroundColor('rgba(0,0,0,0)')
