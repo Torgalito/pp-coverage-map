@@ -234,6 +234,54 @@
       ctx.putImageData(img, 0, 0);
       return cv.toDataURL();
     }
+    /* ---------- density shimmer ----------------------------------------
+       Very subtle, independent fluctuation of the heatmap clouds: each area
+       waxes and wanes on its own, driven by slow layered noise. Reads as a
+       live correction stream rather than a static picture.
+
+       Done in the fragment shader so it costs nothing on the CPU and never
+       rebuilds the texture. Heatmap pixels are isolated by their greenness
+       (green >> blue), so land/ocean stay perfectly still.
+       SHIMMER = amplitude (0 = off, 0.16 ≈ barely-there). */
+    const SHIMMER = 0.16;
+    function installShimmer(mat) {
+      if (REDUCED || mat.userData.ppShimmer) return;
+      mat.userData.ppShimmer = true;
+      mat.onBeforeCompile = shader => {
+        shader.uniforms.uTime = { value: 0 };
+        shader.uniforms.uShimmer = { value: SHIMMER };
+        // Own varying rather than three's built-in UV one: its name changed
+        // across versions (vUv → vMapUv / vEmissiveMapUv) and #include chunks
+        // are still unresolved here, so it can't be detected reliably.
+        shader.vertexShader = 'varying vec2 vPpUv;\n' + shader.vertexShader.replace(
+          '#include <begin_vertex>',
+          '#include <begin_vertex>\n  vPpUv = uv;'
+        );
+        shader.fragmentShader =
+          'uniform float uTime;\nuniform float uShimmer;\nvarying vec2 vPpUv;\n' +
+          shader.fragmentShader.replace(
+            '#include <emissivemap_fragment>',
+            `#include <emissivemap_fragment>
+             float ppHeat = smoothstep(0.02, 0.16, totalEmissiveRadiance.g - totalEmissiveRadiance.b);
+             float ppN = sin(vPpUv.x * 17.0 + uTime * 0.33) * sin(vPpUv.y * 13.0 - uTime * 0.26)
+                       + 0.55 * sin(vPpUv.x * 29.0 - uTime * 0.19) * sin(vPpUv.y * 24.0 + uTime * 0.31);
+             totalEmissiveRadiance *= 1.0 + (ppN / 1.55) * uShimmer * ppHeat;`
+          );
+        mat.userData.shader = shader;   // reassigned on every recompile
+      };
+      // The material was already compiled before we attached onBeforeCompile;
+      // without a distinct cache key three would silently reuse the old program.
+      mat.customProgramCacheKey = () => 'pp-shimmer';
+      mat.needsUpdate = true;
+
+      const t0 = performance.now();
+      (function tick() {
+        const s = mat.userData.shader;
+        if (s) s.uniforms.uTime.value = (performance.now() - t0) / 1000;
+        requestAnimationFrame(tick);
+      })();
+    }
+
     function applyEmissive() {              // re-bind emissive after each texture (re)load
       let n = 0;
       const id = setInterval(() => {
@@ -246,6 +294,7 @@
             const rd = STATE.globe.renderer();
             if (rd) { mat.map.anisotropy = rd.capabilities.getMaxAnisotropy(); mat.map.needsUpdate = true; }
           } catch (e) {}
+          installShimmer(mat);
           mat.needsUpdate = true;
         }
         if (++n > 6) clearInterval(id);
