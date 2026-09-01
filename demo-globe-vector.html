@@ -45,8 +45,16 @@
       --sw-mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
     }
     html, body { height: 100%; margin: 0; background: var(--pp-bg); font-family: var(--sw-font); }
+    /* Halo only, hugging the globe. It used to be a wide gradient offset to the
+       top-left, which tinted the whole page off --pp-bg; now it is centred on
+       the globe and fully faded well before the edges, so everything outside it
+       is exactly #091126 (or the host page, when embedded). */
     #pp-stage { position: absolute; inset: 0;
-      background: radial-gradient(90% 70% at 34% 8%, rgba(70,120,200,.14) 0%, rgba(9,17,38,0) 62%); }
+      background: radial-gradient(circle at 50% 50%,
+        rgba(70,120,200,.17) 0%,
+        rgba(70,120,200,.09) 32%,
+        rgba(70,120,200,.03) 48%,
+        rgba(9,17,38,0) 60%); }
     #pp-globe { position: absolute; inset: 0; filter: drop-shadow(0 6px 26px rgba(18,40,96,0.28)); }
     #pp-globe canvas { outline: none; display: block; }
 
@@ -97,7 +105,10 @@
       font: 500 11.5px/1 var(--sw-font); color: #7e92b5; white-space: nowrap; }
     .pp-key i { width: 7px; height: 7px; border-radius: 50%; }
 
-    /* measured: track (682) + CTA (166) + gaps needs 892px on one line */
+    /* Only bites when the CTA is shown (?cta=1): track 682 + CTA 166 + gaps
+       needs 892px on one line. With the CTA hidden the row has a single child,
+       so wrapping is a no-op and the track simply scrolls below ~715px — the
+       edge fade is driven by measured overflow, so it adapts on its own. */
     @media (max-width: 900px) {
       .pp-row { flex-wrap: wrap; justify-content: center; }
     }
@@ -129,6 +140,9 @@
 
     /* --- CONFIG ------------------------------------------------ */
     const COVERAGE_URL = 'https://coverage.premium-positioning.com/';
+    /* CTA hidden for now — the hero already carries its own conversion buttons.
+       Flip to true (or add ?cta=1) to bring it back; the markup and styles stay. */
+    const SHOW_CTA = new URLSearchParams(location.search).get('cta') === '1';
     const MIN_STATIONS = 3;     // a country lights up at >= N stations
     const DENSE_AT     = 15;    // stations / 100 000 km² to read as dense
     const RIM_STRENGTH = 0.04;
@@ -456,8 +470,10 @@
       bar.innerHTML =
         '<div class="pp-row">' +
           '<div class="pp-chips"></div>' +
-          '<a class="pp-cta" href="' + COVERAGE_URL + '" target="_top">' +
-            'See coverage map<span class="arw" aria-hidden="true">→</span></a>' +
+          (SHOW_CTA
+            ? '<a class="pp-cta" href="' + COVERAGE_URL + '" target="_top">' +
+              'See coverage map<span class="arw" aria-hidden="true">→</span></a>'
+            : '') +
         '</div>' +
         '<div class="pp-key">' +
           '<div><i style="background:' + COVERED + '"></i>Dense coverage — ' + denseCount + ' countries</div>' +
