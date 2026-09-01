@@ -63,6 +63,25 @@ Alternatives conservées dans `GREENS` : **`?green=sage|teal|previous`** permet 
 rebasculer sans toucher au code. `?dev=0` masque le panneau de réglages
 (capture propre, ou comparaison en iframes côte à côte).
 
+### Fond et halo
+
+Le fond est **plat `#091126`** ; le seul écart est un halo circulaire centré sur le
+globe qui s'éteint à 60 % du rayon. C'est ce qui garantit l'absence de raccord en
+iframe : dans un cadre 806×860, le coin le plus éloigné du centre est à 589 px alors
+que le halo s'arrête à 353 px — il est entièrement contenu et ne touche jamais les
+bords du cadre. Si le cadre devient beaucoup plus large que haut, revérifier ce
+rapport avant de conclure qu'il n'y a pas de bord visible.
+
+### Drapeaux d'affichage
+
+| Levier | Défaut | Rétablir |
+|---|---|---|
+| CTA « See coverage map » | **masqué** (`SHOW_CTA`) | `?cta=1`, ou passer la constante à `true` |
+| Panneau de réglages | visible en localhost | `?dev=0` pour le masquer |
+
+Le CTA est masqué, pas supprimé : le hero porte déjà ses propres boutons de
+conversion. Aucun code JS ne dépend de sa présence.
+
 ## Le verdict de couverture (cœur de l'outil)
 
 Recherche (géocodeur Photon, gratuit, sans clé), géolocalisation, ou clic sur la carte →
