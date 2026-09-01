@@ -135,15 +135,34 @@
     return [minX, minY, maxX, maxY];
   }
 
+  /** Spherical polygon area in km² (good enough for ranking densities). */
+  function featureAreaKm2(feature) {
+    const R = 6371, rad = Math.PI / 180;
+    let total = 0;
+    ringsOf(feature).forEach(r => {
+      let s = 0;
+      for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+        s += (r[i][0] - r[j][0]) * rad * (2 + Math.sin(r[j][1] * rad) + Math.sin(r[i][1] * rad));
+      }
+      total += Math.abs(s * R * R / 2);
+    });
+    return total;
+  }
+
   /**
    * Tag each country feature with a station count, and mark it covered.
+   * Also grades coverage: a country only counts as "dense" above a real
+   * station density — filling a whole country on a handful of stations
+   * would overclaim (Brazil: 20 stations over 8.5M km²).
    * @param {Object} geo   countries GeoJSON
    * @param {Array}  points [{lat,lng}]
    * @param {Number} minStations threshold to count as "covered" (default 1)
-   * @returns { features (with .properties.ppCount/.ppCovered), coveredCount }
+   * @param {Number} denseAt  stations per 100 000 km² to count as "dense"
+   * @returns { features (.ppCount/.ppCovered/.ppDensity/.ppDense), coveredCount, denseCount }
    */
-  function tagCoverage(geo, points, minStations) {
+  function tagCoverage(geo, points, minStations, denseAt) {
     const min = minStations || 1;
+    const dense = denseAt === undefined ? 15 : denseAt;
     const feats = geo.features.map(f => ({ f, rings: ringsOf(f), bbox: bboxOf(ringsOf(f)), count: 0 }));
     points.forEach(p => {
       for (let i = 0; i < feats.length; i++) {
@@ -152,25 +171,31 @@
         if (e.rings.some(r => pointInRing(p, r))) { e.count++; break; }
       }
     });
-    let coveredCount = 0;
+    let coveredCount = 0, denseCount = 0;
     feats.forEach(e => {
-      e.f.properties.ppCount = e.count;
-      e.f.properties.ppCovered = e.count >= min;
-      if (e.f.properties.ppCovered) coveredCount++;
+      const p = e.f.properties;
+      const km2 = featureAreaKm2(e.f);
+      p.ppCount = e.count;
+      p.ppAreaKm2 = Math.round(km2);
+      p.ppDensity = km2 > 0 ? +(e.count / (km2 / 100000)).toFixed(2) : 0;
+      p.ppCovered = e.count >= min;
+      p.ppDense = p.ppCovered && p.ppDensity >= dense;
+      if (p.ppCovered) coveredCount++;
+      if (p.ppDense) denseCount++;
     });
-    return { features: geo.features, coveredCount };
+    return { features: geo.features, coveredCount, denseCount };
   }
 
   /** Load countries GeoJSON + station CSVs, return tagged features. */
-  function loadChoropleth(countriesUrl, services, minStations) {
+  function loadChoropleth(countriesUrl, services, minStations, denseAt) {
     return Promise.all([
       fetch(countriesUrl).then(r => r.json()),
       Promise.all(services.map(s => fetch(s.url).then(r => r.text()).then(parseCSV)))
     ]).then(([geo, sets]) => {
       let points = [], total = 0;
       sets.forEach(rows => { total += rows.length; points = points.concat(rows); });
-      const tagged = tagCoverage(geo, points, minStations);
-      return { features: tagged.features, coveredCount: tagged.coveredCount, total };
+      const t = tagCoverage(geo, points, minStations, denseAt);
+      return { features: t.features, coveredCount: t.coveredCount, denseCount: t.denseCount, total };
     });
   }
 

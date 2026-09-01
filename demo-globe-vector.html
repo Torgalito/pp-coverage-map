@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Premium Positioning Coverage — Vector Globe</title>
+
+  <script src="https://unpkg.com/globe.gl@2.46.1/dist/globe.gl.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --pp-bg:        #091126;
+      /* Coverage greens, set by the hero they live in rather than by the globe
+         alone. That hero's action colour is ORANGE, and the previous green
+         (#65CC56) scored 7.85 contrast on the ocean against the CTA's 6.37 on
+         the page — louder than the button, over vastly more area, so the data
+         was out-shouting the conversion element.
+         Emerald at H 158 fixes it on two axes at once: contrast drops to 4.96,
+         measurably under the CTA, and the hue turns cool. Warm advances, cool
+         recedes — so the hierarchy holds on any screen, not just at one
+         brightness. Far enough from orange (H 25) that coverage data can never
+         be mistaken for an action, close enough to green to still read as
+         "covered". Other candidates kept in GREENS, switchable with ?green=. */
+      --pp-covered:   #3FA07C;   /* dense coverage   · H 158 · contrast 4.96 */
+      --pp-partial:   #2C6B57;   /* partial coverage · H 158 · contrast 2.54 */
+      --pp-land:      #334064;   /* countries without network */
+      --pp-ocean:     #192138;   /* globe background */
+      /* borders sit just above the land tone rather than contrasting with it —
+         hue pulled toward --pp-land, alpha roughly halved */
+      --pp-border:    rgba(128,155,205,0.16);
+      --pp-orbit:     rgba(120,170,255,0.22);
+      --pp-blue:      #4D8DF6;   /* interactive accent (chip hover) */
+      /* selected fill — shared by the active region chip and the CTA, as one
+         token so the two can't drift apart */
+      --pp-sel:       rgba(176,200,240,.14);
+      --pp-sel-hi:    rgba(176,200,240,.24);
+      --pp-track:     rgba(10,18,38,.62);   /* segmented-control surface */
+      --pp-atmo:      #24457c;
+      --pp-rim:       #7FA8E0;
+
+      --sw-font: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      --sw-mono: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    html, body { height: 100%; margin: 0; background: var(--pp-bg); font-family: var(--sw-font); }
+    #pp-stage { position: absolute; inset: 0;
+      background: radial-gradient(90% 70% at 34% 8%, rgba(70,120,200,.14) 0%, rgba(9,17,38,0) 62%); }
+    #pp-globe { position: absolute; inset: 0; filter: drop-shadow(0 6px 26px rgba(18,40,96,0.28)); }
+    #pp-globe canvas { outline: none; display: block; }
+
+    /* Bottom UI, two rows only. The regions are a segmented control — one
+       continuous track with a lighter pill on the selection — rather than
+       seven separate pills: fewer edges, less width, and the selection reads
+       at a glance. The legend used to be a third floating box in the top-left
+       corner; folding it in here drops an element and keeps the footprint low.
+       Hierarchy: the CTA is the only saturated fill on screen, the segmented
+       track is quiet, the legend is quieter still. */
+    .pp-bar { position: absolute; left: 16px; right: 16px; bottom: 18px; z-index: 20;
+      display: flex; flex-direction: column; align-items: center; gap: 11px; }
+    .pp-row { display: flex; align-items: center; gap: 12px; max-width: 100%; }
+
+    .pp-chips { display: flex; gap: 2px; min-width: 0; overflow-x: auto;
+      padding: 4px; border-radius: 999px;
+      background: var(--pp-track); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+      box-shadow: inset 0 0 0 1px rgba(140,170,220,.09);
+      -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .pp-chips::-webkit-scrollbar { display: none; }
+    /* only set when the track actually overflows, so a clipped chip reads as
+       "keep scrolling" instead of as a broken edge */
+    .pp-chips.is-scrollable {
+      -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
+              mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%); }
+    .pp-chip { flex: none; padding: 9px 16px; border-radius: 999px; border: 0; cursor: pointer;
+      background: transparent; color: #9db0ce;
+      font: 600 12.5px/1 var(--sw-font); letter-spacing: -.005em; white-space: nowrap;
+      transition: background .16s ease, color .16s ease; }
+    .pp-chip:hover { background: rgba(77,141,246,.18); color: #eaf1fb; }
+    .pp-chip.on { background: var(--pp-sel); color: #fff; }
+
+    /* Same fill as an active chip. The chip gets that colour sitting ON the
+       track, so the CTA layers the two to land on an identical composite —
+       it stands outside the track and would otherwise read lighter. */
+    .pp-cta { flex: none; display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+      padding: 11px 18px; border-radius: 999px; color: #fff;
+      background: linear-gradient(var(--pp-sel), var(--pp-sel)), var(--pp-track);
+      -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+      box-shadow: inset 0 0 0 1px rgba(140,170,220,.09);
+      font: 700 12.5px/1 var(--sw-font); letter-spacing: -.005em; white-space: nowrap;
+      transition: background .18s ease; }
+    .pp-cta:hover { background: linear-gradient(var(--pp-sel-hi), var(--pp-sel-hi)), var(--pp-track); }
+    .pp-cta .arw { font-size: 14px; line-height: 1; opacity: .85; }
+
+    .pp-key { display: flex; align-items: center; gap: 20px; }
+    .pp-key div { display: flex; align-items: center; gap: 8px;
+      font: 500 11.5px/1 var(--sw-font); color: #7e92b5; white-space: nowrap; }
+    .pp-key i { width: 7px; height: 7px; border-radius: 50%; }
+
+    /* measured: track (682) + CTA (166) + gaps needs 892px on one line */
+    @media (max-width: 900px) {
+      .pp-row { flex-wrap: wrap; justify-content: center; }
+    }
+    @media (max-width: 560px) {
+      .pp-bar { left: 8px; right: 8px; bottom: 12px; gap: 9px; }
+      .pp-key { gap: 14px; }
+      .pp-key div { font-size: 11px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="pp-stage"></div>
+  <div id="pp-globe"></div>
+
+  <script src="core/globe-data.js?v=3"></script>
+  <script>
+    /* ============================================================
+     * VECTOR GLOBE — countries are PAINTED INTO THE GLOBE TEXTURE,
+     * not built as 3D polygons.
+     *
+     * Why: globe.gl's ConicPolygonGeometry caps leave triangular
+     * holes at concave coastlines (Great Lakes, Gulf, fjords). That
+     * was proven not to be depth, culling, side walls or triangle
+     * sag — raising altitude to 0.09 changed nothing. Painting into
+     * an equirectangular canvas removes the geometry entirely: no
+     * artefacts, perfectly flat, and full control of fills/borders.
+     * Same technique as the heatmap build in this project.
+     * ============================================================ */
+
+    /* --- CONFIG ------------------------------------------------ */
+    const COVERAGE_URL = 'https://coverage.premium-positioning.com/';
+    const MIN_STATIONS = 3;     // a country lights up at >= N stations
+    const DENSE_AT     = 15;    // stations / 100 000 km² to read as dense
+    const RIM_STRENGTH = 0.04;
+    const RIM_POW      = 8;
+    const AMBIENT      = 0.85;
+    const KEY_LIGHT    = 1.20;
+    const ATMO_ALT     = 0;     // halo off
+    /* The key light tracks the camera (see followLight): a light fixed in world
+       space left whichever hemisphere you flew to unlit — that was the
+       "Australia goes dark" problem. Offsets keep it a 3/4 key rather than a
+       flat frontal one, so the limb still falls away into shadow. */
+    const TEX_W = 8192, TEX_H = 4096;   // country outlines stay crisp at this size
+    const RELIEF_URL = 'data/relief.webp';        // land shading  (ocean neutral)
+    const OCEAN_URL  = 'data/relief-ocean.webp';  // sea floor     (land  neutral)
+    const BUMP_URL   = 'data/bump.webp';          // real elevation, drives normals
+    const num = (k, d) => {
+      const q = new URLSearchParams(location.search).get(k);
+      return q === null ? d : +q;
+    };
+    const RELIEF     = num('relief', 0.70);   // baked land shading
+    const OCEAN_REL  = num('ocean', 0.08);    // sea floor, deliberately far softer
+    /* Bump only modulates the directional share of the lighting — ambient is
+       flat by definition, so it dilutes the effect. Dropping AMBIENT to 0.85
+       against KEY_LIGHT 1.20 gives the key the larger share and lets this
+       register; raise AMBIENT again and the relief will flatten back out. */
+    const BUMP_SCALE = num('bump', 12);
+    /* How far the key light sits off the view axis. Raising these rakes the
+       light across the visible face: more modelling and more bump definition,
+       at the cost of a wider shadowed limb. */
+    const LIGHT_YAW   = num('yaw', -0.60);    // rad, swung left
+    const LIGHT_PITCH = num('pitch', 0.42);   // rad, lifted above
+    /* ----------------------------------------------------------- */
+
+    const REGIONS = [
+      { name: 'Western Europe', lat: 50, lng: 9 },
+      { name: 'Nordics',        lat: 62, lng: 16 },
+      { name: 'North America',  lat: 40, lng: -95 },
+      { name: 'Japan',          lat: 36, lng: 138 },
+      { name: 'Australia',      lat: -27, lng: 134 },
+      { name: 'Southern Africa',lat: -29, lng: 24 },
+      { name: 'Brazil',         lat: -15, lng: -48 }
+    ];
+
+    /* Candidate coverage greens, switchable with ?green= for side-by-side
+       comparison against the real hero. The brief: sit UNDER the orange CTA in
+       the hierarchy. Measured against #192138, the shipped green scores 7.85
+       contrast while the orange CTA scores 6.37 on the page — louder than the
+       button, over far more area. Every candidate lands near 4–5 instead, and
+       the cooler hues recede where orange advances. */
+    const GREENS = {
+      emerald: ['#3FA07C', '#2C6B57'],   // 4.96 · H 158 — SHIPPED (see tokens)
+      previous:['#65CC56', '#45853C'],   // 7.85 · H 112 — out-shouted the CTA
+      sage:    ['#6E9E5C', '#4C6B44'],   // 5.10 · H 100 — quieter but still warm
+      teal:    ['#2F927F', '#256356']    // 4.21 · H 172 — recedes furthest
+    };
+    (() => {
+      const g = GREENS[new URLSearchParams(location.search).get('green')];
+      if (!g) return;
+      document.documentElement.style.setProperty('--pp-covered', g[0]);
+      document.documentElement.style.setProperty('--pp-partial', g[1]);
+    })();
+
+    const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const css = getComputedStyle(document.documentElement);
+    const tok = (n, f) => (css.getPropertyValue(n).trim() || f);
+    const COVERED = tok('--pp-covered'), PARTIAL = tok('--pp-partial');
+    const LAND = tok('--pp-land'), OCEAN = tok('--pp-ocean');
+    const BORDER = tok('--pp-border'), ORBIT = tok('--pp-orbit');
+    const ATMO = tok('--pp-atmo'), RIM = tok('--pp-rim');
+    const RIM_MATS = [];
+
+    if (window.self !== window.top) {
+      document.documentElement.style.background = 'transparent';
+      document.body.style.background = 'transparent';
+    }
+
+    function vp() {
+      const d = document.documentElement;
+      return { w: innerWidth || d.clientWidth || 800, h: innerHeight || d.clientHeight || 600 };
+    }
+    function safeAltitude() {
+      const SIL = 1.22, v = vp(), halfV = 25 * Math.PI / 180;
+      const halfH = Math.atan(Math.tan(halfV) * (v.w / v.h));
+      const a = SIL / Math.sin(Math.min(halfV, halfH)) - 1;
+      return isFinite(a) ? Math.max(1.2, a) : 2.4;
+    }
+    const HOME = () => ({ lat: 22, lng: 14, altitude: Math.max(2.3, safeAltitude()) });
+
+    function orbit(inclDeg, phaseDeg, alt, n) {
+      const incl = inclDeg * Math.PI / 180, pts = []; n = n || 160;
+      for (let i = 0; i <= n; i++) {
+        const t = i / n * Math.PI * 2;
+        const x = Math.cos(t), y = Math.sin(t) * Math.cos(incl), z = Math.sin(t) * Math.sin(incl);
+        pts.push([Math.asin(z) * 180 / Math.PI, Math.atan2(y, x) * 180 / Math.PI + phaseDeg, alt]);
+      }
+      return pts;
+    }
+    function hexToRgb(h) {
+      h = h.replace('#', ''); const n = parseInt(h, 16);
+      return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+    }
+
+    /* ---------- paint the world map into one equirectangular texture ------ */
+    const project = (lng, lat) => [ (lng + 180) / 360 * TEX_W, (90 - lat) / 180 * TEX_H ];
+    function ringSpan(ring) {
+      let mn = 180, mx = -180;
+      ring.forEach(p => { if (p[0] < mn) mn = p[0]; if (p[0] > mx) mx = p[0]; });
+      return mx - mn;
+    }
+    /* Two relief layers, both Natural Earth (public domain), both pre-baked to
+       equirectangular grayscale centred on 128 — the no-op value of an
+       'overlay' blend:
+         · SR_50M  land shading, ocean flat  → recentred, sea is untouched
+         · OB_50M  sea floor,    land flat   → recentred, land is untouched
+       Each is therefore a mathematical no-op exactly where the other acts, so
+       they compose in either order with no mask and no interference, and
+       coastlines stay as sharp as the source rasters. */
+    function loadImage(url) {
+      return new Promise(res => {
+        const im = new Image();
+        im.onload = () => res(im);
+        im.onerror = () => res(null);      // relief is decoration; never block the globe
+        im.src = url;
+      });
+    }
+
+    /* The sea can't ride on 'overlay'. That blend is multiplicative, and against
+       a base as dark as #192138 it moved the mid-Atlantic ridge by exactly 0
+       levels (measured). This converts the layer to signed alpha instead —
+       cool light above the neutral 128, near-black below — which gives absolute,
+       dosable amplitude. Land sits at exactly 128 in that source, so it stays
+       untouched. Land relief keeps 'overlay': on the lighter #334064 it works,
+       and multiplying preserves the fill's hue. */
+    function signedLayer(img) {
+      const w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const x = c.getContext('2d');
+      x.drawImage(img, 0, 0);
+      let d;
+      /* Reading pixels back taints on a cross-origin image. Assets are
+         same-origin today, but a CDN move must not blank the whole globe. */
+      try { d = x.getImageData(0, 0, w, h); } catch (e) { return null; }
+      const p = d.data;
+      for (let i = 0; i < p.length; i += 4) {
+        const dev = p[i] - 128;                 // grayscale, so r carries it
+        const up = dev >= 0;
+        p[i]     = up ? 168 : 6;
+        p[i + 1] = up ? 196 : 10;
+        p[i + 2] = up ? 238 : 22;
+        p[i + 3] = Math.min(255, (up ? dev : -dev) * 2);
+      }
+      x.putImageData(d, 0, 0);
+      return c;
+    }
+
+    function paintWorld(features, sk) {
+      const c = document.createElement('canvas'); c.width = TEX_W; c.height = TEX_H;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = OCEAN; ctx.fillRect(0, 0, TEX_W, TEX_H);
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+
+      features.forEach(f => {
+        const p = f.properties;
+        const fill = p.ppDense ? COVERED : p.ppCovered ? PARTIAL : LAND;
+        const polys = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.coordinates;
+        polys.forEach(rings => {
+          if (ringSpan(rings[0]) > 180) return;   // skip antimeridian wrap-arounds
+          const trace = (context, proj) => {
+            context.beginPath();
+            rings.forEach(ring => {
+              ring.forEach((pt, i) => {
+                const [x, y] = proj(pt[0], pt[1]);
+                i ? context.lineTo(x, y) : context.moveTo(x, y);
+              });
+              context.closePath();
+            });
+          };
+          trace(ctx, project);
+          ctx.fillStyle = fill; ctx.fill('evenodd');        // 'evenodd' honours holes
+          ctx.strokeStyle = BORDER; ctx.lineWidth = 2; ctx.stroke();
+        });
+      });
+
+      if (sk.land && sk.landAmt > 0) {
+        ctx.globalCompositeOperation = 'overlay';
+        ctx.globalAlpha = sk.landAmt;
+        ctx.drawImage(sk.land, 0, 0, TEX_W, TEX_H);
+      }
+      if (sk.sea && sk.seaAmt > 0) {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = sk.seaAmt;
+        ctx.drawImage(sk.sea, 0, 0, TEX_W, TEX_H);
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+      return c;
+    }
+
+    /* ---------- soft diffuse light along the limb ---------- */
+    function installRimLight(mat) {
+      if (mat.userData.ppRim) return;
+      mat.userData.ppRim = true;
+      const c = hexToRgb(RIM);
+      mat.onBeforeCompile = shader => {
+        shader.uniforms.uRim = { value: RIM_STRENGTH };
+        shader.uniforms.uRimPow = { value: RIM_POW };
+        shader.vertexShader = 'varying vec3 vPpN;\nvarying vec3 vPpV;\n' +
+          shader.vertexShader.replace('#include <begin_vertex>',
+            `#include <begin_vertex>
+             vec3 ppWp = (modelMatrix * vec4(position, 1.0)).xyz;
+             vPpN = normalize(mat3(modelMatrix) * normalize(position));
+             vPpV = normalize(cameraPosition - ppWp);`);
+        const fs = shader.fragmentShader;
+        const tag = /#include <opaque_fragment>/.test(fs) ? '#include <opaque_fragment>'
+                  : '#include <output_fragment>';
+        shader.fragmentShader =
+          'uniform float uRim;\nuniform float uRimPow;\nvarying vec3 vPpN;\nvarying vec3 vPpV;\n' +
+          fs.replace(tag, tag + `
+          float ppF = 1.0 - abs(dot(normalize(vPpN), normalize(vPpV)));
+          gl_FragColor.rgb += vec3(${c[0].toFixed(3)}, ${c[1].toFixed(3)}, ${c[2].toFixed(3)})
+                              * pow(ppF, uRimPow) * uRim;`);
+        mat.userData.rimShader = shader;
+        RIM_MATS.push(mat);
+      };
+      mat.customProgramCacheKey = () => 'pp-rim';
+      mat.needsUpdate = true;
+    }
+
+    Promise.all([
+      PPGlobeData.loadChoropleth(
+        'data/countries.geo.json',
+        [{ id: 'a', url: 'data/service_a.csv' }, { id: 'b', url: 'data/service_b.csv' }],
+        MIN_STATIONS, DENSE_AT
+      ),
+      loadImage(RELIEF_URL), loadImage(OCEAN_URL)
+    ]).then(([{ features, coveredCount, denseCount }, relief, oceanRelief]) => {
+
+      /* Signed conversion is per-pixel, so pay it once here rather than on
+         every repaint the sliders trigger. */
+      const seaLayer = oceanRelief ? signedLayer(oceanRelief) : null;
+      const skin = (landAmt, seaAmt) => ({ land: relief, landAmt, sea: seaLayer, seaAmt });
+
+      const globe = Globe()(document.getElementById('pp-globe'))
+        .backgroundColor('rgba(0,0,0,0)')
+        /* the whole map lives in this texture — colour must come from the
+           image, globe.gl nulls material.color once an image is set */
+        .globeImageUrl(paintWorld(features, skin(RELIEF, OCEAN_REL)).toDataURL())
+        /* a height field, so mountains catch the key light instead of only
+           carrying pre-baked shading */
+        .bumpImageUrl(BUMP_URL)
+        .showAtmosphere(true).atmosphereColor(ATMO).atmosphereAltitude(ATMO_ALT)
+
+        /* orbital lines */
+        .pathsData([
+          { pts: orbit(18, 0, 0.24), dash: 0 },
+          { pts: orbit(-32, 60, 0.38), dash: 1 },
+          { pts: orbit(55, -40, 0.52), dash: 1 }
+        ])
+        .pathPoints(d => d.pts)
+        .pathPointLat(p => p[0]).pathPointLng(p => p[1]).pathPointAlt(p => p[2])
+        .pathColor(() => ORBIT).pathStroke(0.5)
+        .pathDashLength(d => d.dash ? 0.035 : 1)
+        .pathDashGap(d => d.dash ? 0.022 : 0)
+        .pathDashAnimateTime(d => (REDUCED || !d.dash) ? 0 : 26000)
+        .pathTransitionDuration(0);
+
+      const amb = (globe.lights() || []).find(l => l.type === 'AmbientLight');
+      const dir = (globe.lights() || []).find(l => l.type === 'DirectionalLight');
+      if (amb) amb.intensity = AMBIENT;
+      if (dir) dir.intensity = KEY_LIGHT;
+      const rd = globe.renderer(); if (rd) rd.toneMappingExposure = 1.0;
+
+      /* Anchor the key light to the camera. It lives in world space, so while
+         the camera orbited it stayed put and the far side went unlit — flying
+         to Australia landed on the night side. Re-aimed every frame from the
+         camera vector, yawed and pitched so it stays a 3/4 key: the visible
+         hemisphere is always lit, one limb still rolls into shadow. */
+      const cam = globe.camera();
+      const yAxis = cam.position.clone().set(0, 1, 0);
+      const lv = cam.position.clone(), ax = cam.position.clone();
+      (function followLight() {
+        requestAnimationFrame(followLight);
+        if (!dir) return;
+        lv.copy(cam.position);
+        if (lv.lengthSq() < 1e-9) return;
+        lv.applyAxisAngle(yAxis, LIGHT_YAW);
+        ax.set(-lv.z, 0, lv.x);                    // horizontal, perpendicular to the view
+        if (ax.lengthSq() > 1e-9) lv.applyAxisAngle(ax.normalize(), LIGHT_PITCH);
+        dir.position.copy(lv.normalize().multiplyScalar(600));
+      })();
+
+      let n = 0, globeMat = null;
+      const rimTimer = setInterval(() => {
+        const mat = globe.globeMaterial();
+        if (mat && mat.map) {
+          globeMat = mat;
+          mat.map.anisotropy = rd ? rd.capabilities.getMaxAnisotropy() : 1;
+          mat.map.needsUpdate = true;
+          mat.bumpScale = BUMP_SCALE;
+          installRimLight(mat);
+          clearInterval(rimTimer);
+        }
+        if (++n > 20) clearInterval(rimTimer);
+      }, 120);
+
+      const c = globe.controls();
+      c.enableZoom = false;
+      c.autoRotate = !REDUCED;
+      c.autoRotateSpeed = 0.30;
+      c.enableDamping = false;
+
+      const fit = () => { const v = vp(); if (v.w > 0 && v.h > 0) globe.width(v.w).height(v.h); };
+      addEventListener('resize', fit); fit();
+      if (window.ResizeObserver) new ResizeObserver(fit).observe(document.documentElement);
+
+      setTimeout(() => { fit(); globe.pointOfView(HOME(), 0); }, 500);
+      setInterval(() => {
+        if (Number.isFinite(globe.camera().position.z)) return;
+        c.reset(); fit(); globe.pointOfView(HOME(), 0);
+      }, 500);
+
+      /* one bar: regions + CTA on top, legend underneath */
+      const bar = document.createElement('div');
+      bar.className = 'pp-bar';
+      bar.innerHTML =
+        '<div class="pp-row">' +
+          '<div class="pp-chips"></div>' +
+          '<a class="pp-cta" href="' + COVERAGE_URL + '" target="_top">' +
+            'See coverage map<span class="arw" aria-hidden="true">→</span></a>' +
+        '</div>' +
+        '<div class="pp-key">' +
+          '<div><i style="background:' + COVERED + '"></i>Dense coverage — ' + denseCount + ' countries</div>' +
+          '<div><i style="background:' + PARTIAL + '"></i>Partial coverage — ' + (coveredCount - denseCount) + '</div>' +
+        '</div>';
+      const chips = bar.querySelector('.pp-chips');
+      REGIONS.forEach(r => {
+        const b = document.createElement('button');
+        b.className = 'pp-chip'; b.textContent = r.name;
+        b.addEventListener('click', () => {
+          chips.querySelectorAll('.pp-chip').forEach(x => x.classList.remove('on'));
+          b.classList.add('on');
+          b.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+          globe.controls().autoRotate = false;
+          globe.pointOfView({ lat: r.lat, lng: r.lng, altitude: Math.max(1.6, safeAltitude()) }, 1200);
+        });
+        chips.appendChild(b);
+      });
+      document.body.appendChild(bar);
+
+      /* Show the edge fade only while something is still hidden to the right.
+         Observed rather than measured once: the webfont swapping in changes
+         the track's width after first paint. */
+      const scrollHint = () => chips.classList.toggle('is-scrollable',
+        chips.scrollLeft + chips.clientWidth < chips.scrollWidth - 1);
+      scrollHint();
+      chips.addEventListener('scroll', scrollHint);
+      addEventListener('resize', scrollHint);
+      if (window.ResizeObserver) new ResizeObserver(scrollHint).observe(chips);
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(scrollHint);
+
+      window.ppGlobe = globe;
+
+      /* ---- DEV lighting panel — localhost only, never ships ---- */
+      if (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return;
+      if (new URLSearchParams(location.search).get('dev') === '0') return;   // ?dev=0 → clean capture
+      const p = document.createElement('div');
+      p.style.cssText = 'position:absolute;top:16px;right:16px;z-index:60;width:226px;padding:14px;' +
+        'background:rgba(8,14,28,.92);backdrop-filter:blur(12px);border-radius:12px;color:#dfe6f2;' +
+        'font:500 11px/1.4 var(--sw-font);box-shadow:0 10px 40px rgba(0,0,0,.5)';
+      const row = (l, mn, mx, st, v) =>
+        `<label style="display:block;margin-bottom:10px"><span style="display:flex;justify-content:space-between;color:#8a9cbe;margin-bottom:5px">
+         <span>${l}</span><b data-out style="color:#7aa7ff;font-variant-numeric:tabular-nums">${v}</b></span>
+         <input type="range" min="${mn}" max="${mx}" step="${st}" value="${v}" style="width:100%;accent-color:#4d8df6"></label>`;
+      p.innerHTML = '<div style="font:600 10px/1 var(--sw-mono);letter-spacing:.14em;color:#5c6e93;margin-bottom:12px">LIGHTING · DEV</div>' +
+        row('Rim intensité', 0, 2, 0.02, RIM_STRENGTH) +
+        row('Rim finesse', 1, 14, 0.2, RIM_POW) +
+        row('Ambiante', 0, 4, 0.05, amb ? amb.intensity : AMBIENT) +
+        row('Lumière clé', 0, 4, 0.05, dir ? dir.intensity : KEY_LIGHT) +
+        row('Halo atmo', 0, 0.4, 0.01, ATMO_ALT) +
+        row('Relief terres', 0, 1.2, 0.02, RELIEF) +
+        row('Relief océans', 0, 1.2, 0.02, OCEAN_REL) +
+        row('Bump 3D', 0, 30, 0.5, BUMP_SCALE);   // ceiling raised: 12 was the old max
+      document.body.appendChild(p);
+      const ins = p.querySelectorAll('input'), outs = p.querySelectorAll('[data-out]');
+      /* The two relief sliders need the world texture repainted. Swapping the
+         existing texture's image beats re-running globeImageUrl: no data-URL
+         encode of 33M pixels, and the material (and its rim shader) survives. */
+      let lastLand = RELIEF, lastSea = OCEAN_REL, repaintT = 0;
+      const repaint = () => {
+        clearTimeout(repaintT);
+        repaintT = setTimeout(() => {
+          if (!globeMat || !globeMat.map) return;
+          globeMat.map.image = paintWorld(features, skin(lastLand, lastSea));
+          globeMat.map.needsUpdate = true;
+        }, 140);
+      };
+      const apply = () => {
+        const v = [...ins].map(i => +i.value);
+        RIM_MATS.forEach(m => { const s = m.userData.rimShader;
+          if (s) { s.uniforms.uRim.value = v[0]; s.uniforms.uRimPow.value = v[1]; } });
+        if (amb) amb.intensity = v[2];
+        if (dir) dir.intensity = v[3];
+        globe.atmosphereAltitude(v[4]);
+        if (v[5] !== lastLand || v[6] !== lastSea) { lastLand = v[5]; lastSea = v[6]; repaint(); }
+        if (globeMat) globeMat.bumpScale = v[7];
+        outs.forEach((o, i) => { o.textContent = v[i].toFixed(2); });
+      };
+      ins.forEach(i => i.addEventListener('input', apply));
+      window.ppLight = () => [...ins].map(i => +i.value);
+    });
+  </script>
+</body>
+</html>
