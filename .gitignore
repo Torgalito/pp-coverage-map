@@ -8,3 +8,12 @@
 
 # local dev server config (kept outside the repo anyway)
 .claude/
+
+# Other builds — kept locally, deliberately NOT published.
+# GitHub Pages serves only the vector globe embedded in the Webflow hero;
+# everything below still lives in this folder and in git history.
+app.html
+demo.html
+demo-globe-choropleth.html
+core/engine.js
+ui/

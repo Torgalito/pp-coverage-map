@@ -4,30 +4,32 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Premium Positioning Coverage</title>
-  <link rel="stylesheet" href="ui/theme-uber.css" />
   <style>
-    html, body { height: 100%; margin: 0; background: var(--pp-bg); color: var(--pp-text); font-family: var(--pp-font); }
-    .wrap { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
-    a.card {
-      display: block; width: min(420px, calc(100% - 48px)); text-decoration: none;
-      background: var(--pp-surface-solid); border: 1px solid var(--pp-border);
-      border-radius: var(--pp-radius); padding: 18px 22px; color: var(--pp-text);
-      transition: transform 0.15s ease, border-color 0.15s ease;
-    }
-    a.card:hover { transform: translateY(-2px); border-color: var(--pp-a-color); }
-    a.card b { display: block; font-size: 16px; margin-bottom: 4px; }
-    a.card span { font-size: 13px; color: var(--pp-text-dim); }
-    h1 { font-size: 18px; margin: 0 0 10px; }
+    :root { --bg:#091126; --text:#e8eef9; --dim:#8ea2c6; --sel:rgba(176,200,240,.14); }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);
+      font-family:"Manrope",-apple-system,BlinkMacSystemFont,system-ui,sans-serif}
+    .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px}
+    h1{font-size:17px;font-weight:700;margin:0}
+    a.card{display:block;width:min(460px,100%);text-decoration:none;color:var(--text);
+      background:var(--sel);border-radius:14px;padding:18px 22px;
+      box-shadow:inset 0 0 0 1px rgba(140,170,220,.10);transition:transform .15s ease}
+    a.card:hover{transform:translateY(-2px)}
+    a.card b{display:block;font-size:15px;margin-bottom:5px}
+    a.card span{font-size:12.5px;color:var(--dim);line-height:1.5}
+    p.note{max-width:460px;margin:0;font-size:12px;line-height:1.6;color:var(--dim)}
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Premium Positioning Coverage</h1>
-    <a class="card" href="demo-globe-vector.html"><b>Demo — 3D globe (vector) · en test</b><span>Pays peints en texture, relief topographique réel, couverture en emerald. Candidat pour le hero Webflow.</span></a>
-    <a class="card" href="demo-globe.html"><b>Demo — 3D globe (heatmap) · EN LIGNE</b><span>Version actuellement dans le hero du site. C'est le repli : pour revenir dessus, remettre cette URL dans l'embed Webflow.</span></a>
-    <a class="card" href="demo-globe-choropleth.html"><b>Demo — 3D globe (choropleth)</b><span>Glossy light globe, covered countries in accent, floating satellite. Alternative concept.</span></a>
-    <a class="card" href="demo.html"><b>Demo — map (realistic)</b><span>deck.gl globe projection over real tiles. Auto camera tour. Webflow iframe.</span></a>
-    <a class="card" href="app.html"><b>App — coverage checker</b><span>Address search, coverage verdict, country panel, CTAs. Flat map for the task.</span></a>
+    <a class="card" href="demo-globe-vector.html">
+      <b>Coverage globe</b>
+      <span>Globe 3D vectoriel — relief topographique réel, couverture emerald,
+      surbrillance de zone au clic. C'est la version embarquée dans le hero.</span>
+    </a>
+    <p class="note">Les autres builds (app coverage checker, carte deck.gl, variantes
+    de globe) restent en local dans le dossier du projet et dans l'historique git ;
+    ils ne sont volontairement pas publiés ici.</p>
   </div>
 </body>
 </html>

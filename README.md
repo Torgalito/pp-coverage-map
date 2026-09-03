@@ -5,15 +5,22 @@ Refonte UX/UI de https://ppheatmap.netlify.app/ en rendu type **Uber** :
 + **GSAP** (animations UI). Tokens design alignés sur le **Base design system** d'Uber
 (bleu #276EF1, radius 8, boutons noir/blanc, couleurs sémantiques Base).
 
-## Les deux builds
+## Ce qui est publié, et ce qui ne l'est pas
+
+**GitHub Pages ne sert que `demo-globe-vector.html`** — la version embarquée dans le
+hero Webflow. Les autres builds restent dans ce dossier en local et dans l'historique
+git, mais sont listés dans `.gitignore` pour ne pas repartir en ligne. Pour en
+republier un : le retirer du `.gitignore`, puis `git add -f <fichier>`.
+
+## Les builds
 
 | Fichier | Usage | Particularités |
 |---|---|---|
 | `demo-globe.html` | Hero marketing (par défaut) | **Vrai globe 3D** (globe.gl / Three.js), **dark theme** (globe navy lisible sur fond #0A1226), **heatmap deux-tons** style deck.gl **haute définition** (texture 4096×2048) : champ de densité par réseau mappé à travers une **rampe de couleur multi-paliers** (translucide → glow → cœur saturé, avec contours/ridges fins) — reproduit le rendu exact de l'app 2D. Texture auto-lumineuse (emissive) pour le glow. Basemap + densités **mises en cache** → les toggles ne font que recomposer (~120 ms). Police **Manrope**. **Network panel** "XYZ · LIVE NETWORK" stylé sur la page (Inter, barres de signal affinées) : liste scrollable de toutes les zones couvertes (Western Europe, Nordics, North America, Japan, Australia, Southern Africa, Brazil) — clic = rotation vers la zone ; **toggles Network 1 / Network 2** qui recomposent la heatmap en direct (texture régénérée, garde-fou : au moins un réseau actif). Heatmap peinte en texture car la HeatmapLayer deck.gl ne rend pas en projection globe ; rampes `RAMP_A/B` + rayon/intensité `cfg` réglables. Zoom molette off, `prefers-reduced-motion` respecté |
 | `demo-globe-vector.html` | **Hero marketing — piste en cours** | Globe vectoriel dark : pays peints dans une texture équirectangulaire (fond `#192138`, terres `#334064`, couverture en **un seul vert emerald** `#3FA07C`), **ombrage topographique réel** par-dessus (voir *Données*), lignes orbitales. **Surbrillance au clic** : la zone choisie s'éclaircit puis retombe en 1,4 s (voir plus bas). **UI en deux rangées** (~39 px en desktop, CTA et légende masqués) : régions en *contrôle segmenté*, piste défilante avec dégradé de bord posé par JS uniquement quand du contenu reste caché à droite. Panneau de réglages **en localhost uniquement** (`?dev=0` pour le masquer). Les pays sont peints en texture et non en `ConicPolygonGeometry` : cette dernière produisait un hachurage triangulaire sur les zones colorées |
-| `demo-globe-choropleth.html` | Variante hero (premium glossy) | Globe clair glossy, **pays en choroplèthe** (couverts en accent, satellite flottant). Plus "marketing premium" que data |
-| `demo.html` | Section de site (Webflow) | **Carte sur globe** (projection MapLibre v5 + deck.gl 9.1 interleaved) : points "city lights" sur tuiles réelles, tour caméra auto. Plus "réaliste/géographique" que conceptuel |
-| `app.html` | Coverage checker complet | **Carte à plat** (mercator — meilleure ergonomie de tâche : pas d'hémisphère masqué, lecture des distances), recherche d'adresse + "My location" + clic-partout → verdict de couverture, vues Coverage/Heatmap, toggles réseaux, panneau pays, thème dark/light, URL partageable, tooltips, fullscreen |
+| `demo-globe-choropleth.html` | Variante hero (premium glossy)  *(local)*| Globe clair glossy, **pays en choroplèthe** (couverts en accent, satellite flottant). Plus "marketing premium" que data |
+| `demo.html` | Section de site (Webflow)  *(local)*| **Carte sur globe** (projection MapLibre v5 + deck.gl 9.1 interleaved) : points "city lights" sur tuiles réelles, tour caméra auto. Plus "réaliste/géographique" que conceptuel |
+| `app.html` | Coverage checker complet  *(local)*| **Carte à plat** (mercator — meilleure ergonomie de tâche : pas d'hémisphère masqué, lecture des distances), recherche d'adresse + "My location" + clic-partout → verdict de couverture, vues Coverage/Heatmap, toggles réseaux, panneau pays, thème dark/light, URL partageable, tooltips, fullscreen |
 
 ### Trois moteurs de rendu, une seule donnée
 
