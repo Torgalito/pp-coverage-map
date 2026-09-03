@@ -10,7 +10,7 @@ Refonte UX/UI de https://ppheatmap.netlify.app/ en rendu type **Uber** :
 | Fichier | Usage | Particularités |
 |---|---|---|
 | `demo-globe.html` | Hero marketing (par défaut) | **Vrai globe 3D** (globe.gl / Three.js), **dark theme** (globe navy lisible sur fond #0A1226), **heatmap deux-tons** style deck.gl **haute définition** (texture 4096×2048) : champ de densité par réseau mappé à travers une **rampe de couleur multi-paliers** (translucide → glow → cœur saturé, avec contours/ridges fins) — reproduit le rendu exact de l'app 2D. Texture auto-lumineuse (emissive) pour le glow. Basemap + densités **mises en cache** → les toggles ne font que recomposer (~120 ms). Police **Manrope**. **Network panel** "XYZ · LIVE NETWORK" stylé sur la page (Inter, barres de signal affinées) : liste scrollable de toutes les zones couvertes (Western Europe, Nordics, North America, Japan, Australia, Southern Africa, Brazil) — clic = rotation vers la zone ; **toggles Network 1 / Network 2** qui recomposent la heatmap en direct (texture régénérée, garde-fou : au moins un réseau actif). Heatmap peinte en texture car la HeatmapLayer deck.gl ne rend pas en projection globe ; rampes `RAMP_A/B` + rayon/intensité `cfg` réglables. Zoom molette off, `prefers-reduced-motion` respecté |
-| `demo-globe-vector.html` | **Hero marketing — piste en cours** | Globe vectoriel dark : pays peints dans une texture équirectangulaire 8192×4096 (fond `#192138`, terres `#334064`, couverture en deux verts H 112°), **ombrage topographique réel** par-dessus (voir *Données*), lignes orbitales. **UI en deux rangées seulement** (~61 px de haut en desktop) : régions en *contrôle segmenté* (une piste continue, pastille claire sur la sélection) + CTA « See coverage map » → `https://coverage.premium-positioning.com/` (ouvert en `_top`, donc hors iframe) ; le CTA partage le token `--pp-sel` avec la pastille active, en le superposant à `--pp-track` pour obtenir le même composite hors de la piste. Légende à pastilles rondes en dessous. Bascule sur deux rangées sous 900 px (largeur mesurée nécessaire : 892 px), la piste défile sous ~715 px avec un dégradé de bord posé par JS uniquement quand du contenu reste caché à droite. Panneau de réglages (rim, ambiante, lumière clé, halo, relief terres/océans, bump) **en localhost uniquement**. Les pays sont peints en texture et non en `ConicPolygonGeometry` : cette dernière produisait un hachurage triangulaire sur les zones colorées |
+| `demo-globe-vector.html` | **Hero marketing — piste en cours** | Globe vectoriel dark : pays peints dans une texture équirectangulaire (fond `#192138`, terres `#334064`, couverture en **un seul vert emerald** `#3FA07C`), **ombrage topographique réel** par-dessus (voir *Données*), lignes orbitales. **Surbrillance au clic** : la zone choisie s'éclaircit puis retombe en 1,4 s (voir plus bas). **UI en deux rangées** (~39 px en desktop, CTA et légende masqués) : régions en *contrôle segmenté*, piste défilante avec dégradé de bord posé par JS uniquement quand du contenu reste caché à droite. Panneau de réglages **en localhost uniquement** (`?dev=0` pour le masquer). Les pays sont peints en texture et non en `ConicPolygonGeometry` : cette dernière produisait un hachurage triangulaire sur les zones colorées |
 | `demo-globe-choropleth.html` | Variante hero (premium glossy) | Globe clair glossy, **pays en choroplèthe** (couverts en accent, satellite flottant). Plus "marketing premium" que data |
 | `demo.html` | Section de site (Webflow) | **Carte sur globe** (projection MapLibre v5 + deck.gl 9.1 interleaved) : points "city lights" sur tuiles réelles, tour caméra auto. Plus "réaliste/géographique" que conceptuel |
 | `app.html` | Coverage checker complet | **Carte à plat** (mercator — meilleure ergonomie de tâche : pas d'hémisphère masqué, lecture des distances), recherche d'adresse + "My location" + clic-partout → verdict de couverture, vues Coverage/Heatmap, toggles réseaux, panneau pays, thème dark/light, URL partageable, tooltips, fullscreen |
@@ -62,6 +62,51 @@ assez vert pour rester « couvert ».
 Alternatives conservées dans `GREENS` : **`?green=sage|teal|previous`** permet de
 rebasculer sans toucher au code. `?dev=0` masque le panneau de réglages
 (capture propre, ou comparaison en iframes côte à côte).
+
+### Surbrillance de la zone au clic
+
+Cliquer une puce éclaircit brièvement les pays de la région, puis l'effet retombe
+sur **1,4 s** (durée reprise de la référence fournie par le client).
+
+Le monde vit dans **une seule grande texture**, impossible à repeindre à chaque
+image. L'effet passe donc par le **canal émissif** du matériau : un petit masque
+2048×1024 dit *où* éclaircir, et un seul flottant animé dit *de combien*. Le masque
+n'est repeint qu'au clic ; l'animation est ensuite gratuite.
+
+Deux pièges traités, tous deux capables de rendre l'effet silencieusement absent :
+
+- `installRimLight()` fixe un `customProgramCacheKey` **constant**. Ajouter
+  `emissiveMap` *après* la première compilation ferait réutiliser un programme
+  obsolète. Le canal est donc câblé **une fois, à l'init** — la forme du shader ne
+  change plus jamais ensuite.
+- La liaison de la texture se fait sur `setInterval`, **pas** `requestAnimationFrame` :
+  rAF est suspendu tant que la page ou l'iframe est masquée, ce qui laisserait le
+  globe bloqué sur son placeholder jusqu'au scroll. C'est exactement le symptôme
+  « le globe met du temps à apparaître sur mobile ».
+
+**Découpage région → pays** : table explicite `REGION_COUNTRIES` (clés = propriété
+GeoJSON `name`). Un rayon autour du point de région ne peut pas fonctionner — la
+Suède est à ~1 400 km du point « Western Europe » alors que la Grèce est à ~1 700 km.
+Couvre les 41 pays actuellement couverts. ⚠️ Un nouveau pays couvert ne s'allumera
+pas tant qu'il n'est pas ajouté à cette table (rien ne casse pour autant). La
+Tanzanie est rattachée à « Southern Africa » faute de mieux : c'est le seul autre
+pays africain couvert.
+
+### Premier affichage
+
+Trois corrections, la première de loin la plus importante :
+
+| | Avant | Après |
+|---|---|---|
+| Texture vers le matériau | data URL PNG de **25,5 Mo** encodé puis redécodé | canvas passé directement |
+| Taille de texture | 8192×4096 partout (33,5 M px) | 4096×2048 sous 768 px de large |
+| Assets | demandés après le parsing de `globe-data.js` | `<link rel="preload">` dans le `<head>` |
+
+8192×4096 vaut **le double du plafond de surface canvas d'iOS Safari** (16,7 M px)
+et dépasse le `MAX_TEXTURE_SIZE` de beaucoup de GPU mobiles : ce n'était pas qu'une
+question de lenteur. La largeur est lue via `innerWidth || screen.width` — `innerWidth`
+vaut 0 dans une iframe en `display:none`, ce qui aurait figé un embed desktop sur la
+texture basse résolution.
 
 ### Fond et halo
 
